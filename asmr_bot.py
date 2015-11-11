@@ -26,6 +26,7 @@ changed = True
 vidIDregex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
 toplist = shelve.open("topPosts",'c')
 
+
 print "Opening database.."
 sql = sqlite3.connect('sql.db')
 cur = sql.cursor()
@@ -35,7 +36,6 @@ sql.commit()
 
 
 MODLIST = ['theonefoster', 'nvadergir', 'zimm3rmann', 'youngnreckless', 'mahi-mahi', "asmr_bot", "sidecarfour", "harrietpotter"]
-
 BANNEDCHANNELS = [
     'UC_Jm39jFO9cH8KB9GIW54kg' # "ASMR Casual" / "letsASMR" - for faking giveaways, vote manipulation, commenting on own submissions
     ]
@@ -62,7 +62,7 @@ Thanks for your interest!
 """
 
 TITLEEXPLAIN = """
-Hey OP! This post has ben removed because the title does not follow our guidelines. This may because it looks clickbaity, or because it does not describe the triggers present in the content you've linked to.
+Hey OP! This post has ben removed because the title does not follow our guidelines (submission rule 7). This may because it looks clickbaity, or because it does not describe the triggers present in the content you've linked to.
 
 Remeber that the title should describe the content and its triggers, and that your own commentary on or experience with the content should go in the comments section.
 
@@ -73,7 +73,17 @@ BANNEDCHANNELCOMMENT = """
 This submission has been removed because the youtube channel it links to is banned from this subreddit.
 """
 
+def getYoutubeData(input,part,val): #input = search value, part=where to search, val=return value
+     #use this to replace the many functions below.
+     #part should be either snippet or statistics.
+     URL = ("https://www.googleapis.com/youtube/v3/videos?part=" & part & "&id=" + input + "&key=AIzaSyAEBupCmdf0-i-eEsU7wL6REywZUSL6q1o")
+     videoInfo = json.loads(urllib2.urlopen(URL).read())
+     items = videoInfo[u'items']
+     itemsDic = items[0]
+     rtndic = itemsDic[val] #does this work? Might need the u
 
+
+     return -1
 
 def getYoutubeVideoTitleFromVideoID(videoID): #value is the type of info to return
     try:
@@ -87,7 +97,7 @@ def getYoutubeVideoTitleFromVideoID(videoID): #value is the type of info to retu
         return snippet[u'title']
 
     except:
-        return ""
+        return -1
 
 def getYoutubeChannelNameFromVideoID(videoID): #value is the type of info to return
     try:
@@ -109,7 +119,7 @@ def getYoutubeChannelNameFromVideoID(videoID): #value is the type of info to ret
 
         return rtnvalue
     except:
-        return ""
+        return -1
 
 def getYoutubeChannelIDFromVideoID(videoID): #value is the type of info to return
     try:
@@ -123,7 +133,7 @@ def getYoutubeChannelIDFromVideoID(videoID): #value is the type of info to retur
         return snippet[u'channelId']
 
     except:
-        return ""
+        return -1
 
 def getYoutubeChannelDescriptionFromName(ChannelName): #value is the type of info to return
     try:
@@ -192,8 +202,8 @@ def getSubscriberCountFromChannelID(ID): #value is the type of info to return
     except:
         return -1
 
-#def redditUserActiveEnoughForFlair(username): #TODO: create function which checks their user history to see if they're active.
-#    user = r.get_redditor(username)
+def redditUserActiveEnoughForFlair(username):
+    user = r.get_redditor(username) #TODO: build this
 
 
 def login():
@@ -202,10 +212,10 @@ def login():
 	r.refresh_access_information(appRefreshToken)
 	return r
 
-
 def asmrbot():
     parseComments()
-    checkChannel()
+    #checkChannel()
+    #getTopSubmissions()
     replyToMessages()
     
 
@@ -251,12 +261,9 @@ def parseComments():
                         submission = r.get_submission(submission_id=submissionID[3:])
                         TLcomment = submission.add_comment(TITLEEXPLAIN).distinguish()
                         submission.remove(False)
-                    #elif ('!bottest' in commentBody):
-                    #    comment.reply("Hey!")
-                            
 
             except AttributeError: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
-                 print "Attribute Error!"
+                 print "Attribute Error! Comment was probably deleted."
 
 def checkChannel():
     print ("Fetching submissions..")
@@ -291,23 +298,28 @@ def getTopSubmissions():
 #        totalcount += 1
 #        print ("Got submission " + submission.id + "(" + str(totalcount) + ")")
 #        if (".youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
-#            
-#            result = vidIDregex.split(submission.url)
-#            vidID = result[5]
-#            channelName = getYoutubeChannelInfoFromVideoID(vidID, "NAME")
-#            channelTitle = getYoutubeChannelInfoFromVideoID(vidID, "TITLE")
-#            if (channelName != -1) and (channelTitle != -1):
-#                toplist[str(addedcount)] = {"URL" : submission.url, "Channel": channelName, "Title": channelTitle}
-#                toplist.sync()
-#                addedcount += 1
+#                
+#            try:
+#                if addedcount == 70:
+#                    result = False
+#                result = vidIDregex.split(submission.url)
+#                vidID = result[5]
+#                channelName = getYoutubeChannelInfoFromVideoID(vidID, "NAME")
+#                channelTitle = getYoutubeChannelInfoFromVideoID(vidID, "TITLE")
+#                if (channelName != -1) and (channelTitle != -1):
+#                    toplist[str(addedcount)] = {"URL" : submission.url, "Channel": channelName, "Title": channelTitle}
+#                    toplist.sync()
+#                    addedcount += 1
+#            except:
+#                print "Exception!"
 #
 #    print "total videos: " + str(addedcount) #471
 
-    rand = random.randint(1, 471) #471 entries in toplist (video submissions from /r/asmr/top)
+    rand = random.randint(1, 471)
 
     rtn = "How about [" + toplist[str(rand)]["Title"] + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? If you don't like this video, reply with ""!recommend"" and I'll find you another one."
 
-    return filter(lambda x: x in string.printable, rtn)
+    return filter(lambda x: x in string.printable, rtn) # removes stupid unicode characters
 
 def replyToMessages():
     messages = r.get_unread()
@@ -316,13 +328,16 @@ def replyToMessages():
         user = message.author.name
 
         print "Message dectected from " + user
+
         if ("!recommend" in message.body.lower()): #recommendation
-            print "responding with recommendation"
+            print "Recommending popular video"
             messageToSend = getTopSubmissions()
             message.reply(messageToSend)
         elif(message.subject == "flair request" or message.subject == "re: flair request"): #set flair
+            
             gotfromname = True
             des = getYoutubeChannelDescriptionFromName(message.body)
+            
             if des == -1:
                 des = getYoutubeChannelDescriptionFromID(message.body)
                 gotfromname = False
@@ -338,29 +353,36 @@ def replyToMessages():
                     if int(subs) >= 1000:
                         if gotfromname:
                             r.set_flair(subreddit="asmr", item=user, flair_text=message.body, flair_css_class="purpleflair")
-                            message.reply("Verification has been sucessful! Your flair should be applied within a few minutes. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
-                            
                         else:
                             name = getChannelNameFromID(message.body)
                             r.set_flair(subreddit="asmr", item=user, flair_text=name, flair_css_class="purpleflair")
-                            message.reply("Verification has been sucessful! Your flair should be applied within a few minutes. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
+
+                        message.reply("Verification has been sucessful! Your flair should be applied within a few minutes. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
+                        print "Verified and set flair!"
                     else:
                         message.reply("Unfortunately you need to have 1000 youtube subscribers to be awarded with flair. You only have " + str(subs) + " at the momnent, but try again once you reach 1000!")
+                        print "flair verification failed - not enough subs"
                 else:
                     message.reply("I couldn't see the verification message in your channel description. Please make sure you include the exact phrase '**Hey \\/r/asmr mods!**' in your youtube channel description so I can verify that you own that channel. You should remove the verification message once you're verified.")
+                    print "flair verification failed - no verification message"
             else:
                 message.reply("""
 Sorry, I couldn't find that channel. You can use either the channel name (eg 'asmrtess') or the channel ID (the messy part in the youtube link - go to your page and get just the ID from the URL in the format youtube.com/user/<ID>). Sending either the username OR the ID should work. 
                 
-Please make sure the name is exactly correct. If you're still having problems, please [message the human mods](https://www.reddit.com/message/compose?to=%2Fr%2Fasmr)""")
+Please make sure the name is exactly correct. See [the wiki page](/r/asmr/wiki/flair_requests) for instructions. If you're still having problems, please [message the human mods](https://www.reddit.com/message/compose?to=%2Fr%2Fasmr)""")
+                print "flair verification failed - channel not found"
         elif(message.subject == "delete flair"): #delete flair
             if message.body == "delete flair":
                 r.delete_flair(subreddit="asmr", user=user)
                 message.reply("Your flair has been deleted. To apply for flair again, use [this link.](https://www.reddit.com/message/compose?to=asmr_bot&subject=flair%20request&message=enter your channel name here)")
+                print "flair deleted"
         elif("post reply" not in message.subject):
-            print "responding - command not recognised."
+            print "command not recognised."
             message.reply("Sorry - I don't recognise that command.If you have any feedback, please message /u/theonefoster.")
         message.mark_as_read()
+
+def userIsActive(username):
+    return True
 
 print ("Logging in..")
 r = login()
