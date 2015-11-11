@@ -192,8 +192,8 @@ def getSubscriberCountFromChannelID(ID): #value is the type of info to return
     except:
         return -1
 
-def redditUserActiveEnoughForFlair(username):
-    user = r.get_redditor(username)
+#def redditUserActiveEnoughForFlair(username): #TODO: create function which checks their user history to see if they're active.
+#    user = r.get_redditor(username)
 
 
 def login():
@@ -339,6 +339,7 @@ def replyToMessages():
                         if gotfromname:
                             r.set_flair(subreddit="asmr", item=user, flair_text=message.body, flair_css_class="purpleflair")
                             message.reply("Verification has been sucessful! Your flair should be applied within a few minutes. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
+                            
                         else:
                             name = getChannelNameFromID(message.body)
                             r.set_flair(subreddit="asmr", item=user, flair_text=name, flair_css_class="purpleflair")
@@ -360,9 +361,6 @@ Please make sure the name is exactly correct. If you're still having problems, p
             print "responding - command not recognised."
             message.reply("Sorry - I don't recognise that command.If you have any feedback, please message /u/theonefoster.")
         message.mark_as_read()
-
-def userIsActive(username):
-    return True
 
 print ("Logging in..")
 r = login()
