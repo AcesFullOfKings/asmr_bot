@@ -202,15 +202,10 @@ def login():
 	r.refresh_access_information(appRefreshToken)
 	return r
 
-#appSecret = 'pfOKOTwS1QNq6Q4ZgoZEx1869Qo'
-#appURI = 'https://127.0.0.1:65010/authorize_callback'
-#appRefreshToken = '45992841-O7fPEGkrdHevTJ2-OiDAn5O05wI' # doesn't expire
-
 
 def asmrbot():
     parseComments()
-    #checkChannel()
-    #getTopSubmissions()
+    checkChannel()
     replyToMessages()
     
 
@@ -296,24 +291,19 @@ def getTopSubmissions():
 #        totalcount += 1
 #        print ("Got submission " + submission.id + "(" + str(totalcount) + ")")
 #        if (".youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
-#                
-#            try:
-#                if addedcount == 70:
-#                    result = False
-#                result = vidIDregex.split(submission.url)
-#                vidID = result[5]
-#                channelName = getYoutubeChannelInfoFromVideoID(vidID, "NAME")
-#                channelTitle = getYoutubeChannelInfoFromVideoID(vidID, "TITLE")
-#                if (channelName != -1) and (channelTitle != -1):
-#                    toplist[str(addedcount)] = {"URL" : submission.url, "Channel": channelName, "Title": channelTitle}
-#                    toplist.sync()
-#                    addedcount += 1
-#            except:
-#                print "Exception!"
+#            
+#            result = vidIDregex.split(submission.url)
+#            vidID = result[5]
+#            channelName = getYoutubeChannelInfoFromVideoID(vidID, "NAME")
+#            channelTitle = getYoutubeChannelInfoFromVideoID(vidID, "TITLE")
+#            if (channelName != -1) and (channelTitle != -1):
+#                toplist[str(addedcount)] = {"URL" : submission.url, "Channel": channelName, "Title": channelTitle}
+#                toplist.sync()
+#                addedcount += 1
 #
 #    print "total videos: " + str(addedcount) #471
 
-    rand = random.randint(1, 471)
+    rand = random.randint(1, 471) #471 entries in toplist (video submissions from /r/asmr/top)
 
     rtn = "How about [" + toplist[str(rand)]["Title"] + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? If you don't like this video, reply with ""!recommend"" and I'll find you another one."
 
