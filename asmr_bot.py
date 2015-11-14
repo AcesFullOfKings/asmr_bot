@@ -17,7 +17,7 @@ import string
 
 #PRAW details
 appUserAgent = 'a bot to assist in the moderation of /r/asmr. developer:/u/theonefoster'
-appID = 'removed' #removed this information as it should not be in the public domain. Bot will not run without it, but you can replace it with your own data.
+appID = 'removed' #removed this information as it should not be in the public domain. Bot will not run without it, but you can replace it with your own keys.
 appSecret = 'removed'
 appURI = 'https://127.0.0.1:65010/authorize_callback'
 appRefreshToken = 'removed' # doesn't expire
@@ -26,6 +26,9 @@ changed = True
 vidIDregex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
 toplist = shelve.open("topPosts",'c')
 
+#gdata details
+gApiKey = "removed"
+gBrowserKey  = "removed"
 
 print "Opening database.."
 sql = sqlite3.connect('sql.db')
@@ -47,7 +50,13 @@ The [meta] tag is intended for posts which relate specifically to subjects conce
 """
 
 SBEXPLAIN = """
-Hey OP! Unfortunately you appear to be shadowbanned site-wide on reddit. The most likely reason for this is posting many links to a single (usually your own) channel or website, which goes against reddiquette and is considered spamming. You can try [contacting reddit admins](https://www.reddit.com/message/compose?to=%2Fr%2Freddit.com) to see if they will reverse it - otherwise everything you post (including comments) remains invisible to non-moderators. 
+Hey OP! Unfortunately you appear to be [shadowbanned](https://www.reddit.com/r/AskReddit/comments/11ggji/can_someone_please_explain_to_me_what_shadow/) site-wide on reddit. The most likely reason for this is posting many links to a single (usually your own) channel or website, which goes against reddiquette and is considered spamming, although there are other possible reasons. You can try [contacting reddit admins](https://www.reddit.com/message/compose?to=%2Fr%2Freddit.com) to see if they will reverse it - otherwise everything you post (including comments) will remain invisible to non-moderators. 
+
+This is a site-wide ban implemented by the admins and outside the control of the moderators of /r/asmr. If you haven't already, it is recommended that you read up on [reddit's guidelines on self-promotion](https://www.reddit.com/wiki/selfpromotion) and the [spam FAQ](https://www.reddit.com/wiki/faq#wiki_what_constitutes_spam.3F) (it'll only take a few minutes!) Thanks for your interest!
+"""
+
+SBEXPLAIN_MSG = """
+Hey! You are receiving this message because you just commented in /r/asmr, but unfortunately you appear to be [shadowbanned](https://www.reddit.com/r/AskReddit/comments/11ggji/can_someone_please_explain_to_me_what_shadow/) site-wide on reddit. The most likely reason for this is posting many links to a single (usually your own) channel or website, which goes against reddiquette and is considered spamming, although there are other possible reasons. You can try [contacting reddit admins](https://www.reddit.com/message/compose?to=%2Fr%2Freddit.com) to see if they will reverse it - otherwise everything you post (including comments and submissions) will remain invisible to non-moderators. 
 
 This is a site-wide ban implemented by the admins and outside the control of the moderators of /r/asmr. If you haven't already, it is recommended that you read up on [reddit's guidelines on self-promotion](https://www.reddit.com/wiki/selfpromotion) and the [spam FAQ](https://www.reddit.com/wiki/faq#wiki_what_constitutes_spam.3F) (it'll only take a few minutes!) Thanks for your interest!
 """
@@ -62,11 +71,11 @@ Thanks for your interest!
 """
 
 TITLEEXPLAIN = """
-Hey OP! This post has ben removed because the title does not follow our guidelines (submission rule 7). This may because it looks clickbaity, or because it does not describe the triggers present in the content you've linked to.
+Hey OP! This post has been removed because the title does not follow our guidelines (submission rule 7). This may because it looks clickbaity, or because it does not describe the triggers present in the content you've linked to.
 
-Remeber that the title should describe the content and its triggers, and that your own commentary on or experience with the content should go in the comments section.
+Remeber that the title should contain a description of the content and its triggers only, and that your own commentary or experiences of the content should go in the comments section.
 
-Please read our guidelines at /r/asmr/wiki, then feel free to resubmit.
+Please read our guidelines at /r/asmr/wiki, especially submission rule 7, then feel free to resubmit.
 """
 
 BANNEDCHANNELCOMMENT = """
@@ -76,7 +85,7 @@ This submission has been removed because the youtube channel it links to is bann
 def getYoutubeData(input,part,val): #input = search value, part=where to search, val=return value
      #use this to replace the many functions below.
      #part should be either snippet or statistics.
-     URL = ("https://www.googleapis.com/youtube/v3/videos?part=" & part & "&id=" + input + "&key=AIzaSyAEBupCmdf0-i-eEsU7wL6REywZUSL6q1o")
+     URL = ("https://www.googleapis.com/youtube/v3/videos?part=" & part & "&id=" + input + "&key=" &gBrowserKey)
      videoInfo = json.loads(urllib2.urlopen(URL).read())
      items = videoInfo[u'items']
      itemsDic = items[0]
@@ -87,7 +96,7 @@ def getYoutubeData(input,part,val): #input = search value, part=where to search,
 
 def getYoutubeVideoTitleFromVideoID(videoID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=AIzaSyAEBupCmdf0-i-eEsU7wL6REywZUSL6q1o")
+        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" &gBrowserKey)
 
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
@@ -101,7 +110,7 @@ def getYoutubeVideoTitleFromVideoID(videoID): #value is the type of info to retu
 
 def getYoutubeChannelNameFromVideoID(videoID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=AIzaSyAEBupCmdf0-i-eEsU7wL6REywZUSL6q1o")
+        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" &gBrowserKey)
 
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
@@ -123,7 +132,7 @@ def getYoutubeChannelNameFromVideoID(videoID): #value is the type of info to ret
 
 def getYoutubeChannelIDFromVideoID(videoID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=AIzaSyAEBupCmdf0-i-eEsU7wL6REywZUSL6q1o")
+        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" &gBrowserKey)
 
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
@@ -137,13 +146,13 @@ def getYoutubeChannelIDFromVideoID(videoID): #value is the type of info to retur
 
 def getYoutubeChannelDescriptionFromName(ChannelName): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&forUsername=" + ChannelName + "&key=AIzaSyAEBupCmdf0-i-eEsU7wL6REywZUSL6q1o")
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&forUsername=" + ChannelName + "&key=" &gBrowserKey)
 
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
         itemsDic = items[0]
         snippet = itemsDic[u'snippet']
-        description = snippet[u'title']
+        description = snippet[u'description']
 
         return description
     except:
@@ -151,7 +160,7 @@ def getYoutubeChannelDescriptionFromName(ChannelName): #value is the type of inf
 
 def getYoutubeChannelDescriptionFromID(ChannelID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + ChannelID + "&key=AIzaSyAEBupCmdf0-i-eEsU7wL6REywZUSL6q1o")
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + ChannelID + "&key=" &gBrowserKey)
 
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
@@ -165,7 +174,7 @@ def getYoutubeChannelDescriptionFromID(ChannelID): #value is the type of info to
 
 def getSubscriberCountFromChannelName(ChannelName): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername=" + ChannelName + "&key=AIzaSyAEBupCmdf0-i-eEsU7wL6REywZUSL6q1o")
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername=" + ChannelName + "&key=" &gBrowserKey)
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
         itemsDic = items[0]
@@ -178,7 +187,7 @@ def getSubscriberCountFromChannelName(ChannelName): #value is the type of info t
 
 def getChannelNameFromID(ID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + ID + "&key=AIzaSyAEBupCmdf0-i-eEsU7wL6REywZUSL6q1o")
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + ID + "&key=" &gBrowserKey)
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
         itemsDic = items[0]
@@ -191,7 +200,7 @@ def getChannelNameFromID(ID): #value is the type of info to return
 
 def getSubscriberCountFromChannelID(ID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&id=" + ID + "&key=AIzaSyAEBupCmdf0-i-eEsU7wL6REywZUSL6q1o")
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&id=" + ID + "&key=" &gBrowserKey)
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
         itemsDic = items[0]
@@ -205,18 +214,42 @@ def getSubscriberCountFromChannelID(ID): #value is the type of info to return
 def redditUserActiveEnoughForFlair(username):
     user = r.get_redditor(username) #TODO: build this
 
-
-def login():
-	r = praw.Reddit(appUserAgent)
-	r.set_oauth_app_info(appID, appSecret, appURI)
-	r.refresh_access_information(appRefreshToken)
-	return r
-
 def asmrbot():
     parseComments()
-    #checkChannel()
+    checkChannel()
     #getTopSubmissions()
     replyToMessages()
+    getModQueue()
+
+
+def login():
+    print ("logging in..")
+    r = praw.Reddit(appUserAgent)
+    r.set_oauth_app_info(appID,appSecret, appURI)
+    r.refresh_access_information(appRefreshToken)
+    print ("logged in as " + str(r.user.name))
+    return r
+
+def getModQueue():
+       modqueue = r.get_mod_queue(subreddit="asmr", fetch=True)
+
+       for item in modqueue:
+            print("New modqueue item!")
+            try:
+                user = r.get_redditor(item.author.name, fetch=True)
+                a = user._has_fetched
+                print a
+
+            except: #if user is shadowbanned the above will throw HTTPError (404)
+                print ("Replying to shadowbanned user..")
+                
+                if item.fullname.startswith("t3"):  #submission
+                    item.add_comment(SBEXPLAIN).distinguish()
+                    item.remove(False)
+                elif item.fullname.startswith("t1"):
+                    r.send_message(recipient=item.author, subject="Shadowban notification", message=SBEXPLAIN_MSG)
+                    item.remove(False)
+                item.clicked = True
     
 
 def parseComments():
@@ -266,10 +299,7 @@ def parseComments():
                  print "Attribute Error! Comment was probably deleted."
 
 def checkChannel():
-    print ("Fetching submissions..")
     submissions = subreddit.get_new(limit=15)
-
-    print "---"*10
 
     for submission in submissions:
         cur.execute("SELECT * FROM doneSubmissions WHERE ID=?", [submission.id])
@@ -280,13 +310,16 @@ def checkChannel():
             #for each new submission..
 
             if ("youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
-                result = vidIDregex.split(submission.url)
-                vidID = result[5]
-                channelName = getYoutubeChannelInfoFromVideoID(vidID, "ID")
-                if channelName in BANNEDCHANNELS:
-                    print "Removing submission (banned youtube channel).."
-                    submission.add_comment(BANNEDCHANNELCOMMENT).distinguish()
-                    submission.remove(False) #checks for banned youtube channels
+                try:
+                    result = vidIDregex.split(submission.url)
+                    vidID = result[5]
+                    channelID = getYoutubeChannelIDFromVideoID(vidID)
+                    if channelID in BANNEDCHANNELS:
+                        print "Removing submission "# & submission.permalink & " (banned youtube channel).."
+                        submission.add_comment(BANNEDCHANNELCOMMENT).distinguish()
+                        submission.remove(False) #checks for banned youtube channels
+                except Exception, e:
+                    print "exception on removal of submission " & submission.short_link & " - " & str(e)
 
 def getTopSubmissions():
     #submissions = subreddit.get_top_from_all(limit = 700)
@@ -325,66 +358,74 @@ def replyToMessages():
     messages = r.get_unread()
 
     for message in messages:
-        user = message.author.name
+        if not message.was_comment:
+            user = message.author.name
 
-        print "Message dectected from " + user
+            print "Message dectected from " + user
 
-        if ("!recommend" in message.body.lower()): #recommendation
-            print "Recommending popular video"
-            messageToSend = getTopSubmissions()
-            message.reply(messageToSend)
-        elif(message.subject == "flair request" or message.subject == "re: flair request"): #set flair
+            if ("!recommend" in message.body.lower()): #recommendation
+                print "Recommending popular video"
+                messageToSend = getTopSubmissions()
+                message.reply(messageToSend)
+            elif(message.subject == "flair request" or message.subject == "re: flair request"): #set flair
             
-            gotfromname = True
-            des = getYoutubeChannelDescriptionFromName(message.body)
+                gotfromname = True
+                des = getYoutubeChannelDescriptionFromName(message.body)
             
-            if des == -1:
-                des = getYoutubeChannelDescriptionFromID(message.body)
-                gotfromname = False
+                if des == -1:
+                    des = getYoutubeChannelDescriptionFromID(message.body)
+                    gotfromname = False
 
-            if des != -1:
-                description = des.lower()
-                if "hey /r/asmr mods!" in description:
-                    if gotfromname:
-                        subs = getSubscriberCountFromChannelName(message.body.lower())
-                    else:
-                        subs = getSubscriberCountFromChannelID(message.body)
-
-                    if int(subs) >= 1000:
+                if des != -1:
+                    description = des.lower()
+                    if "hey /r/asmr mods!" in description:
                         if gotfromname:
-                            r.set_flair(subreddit="asmr", item=user, flair_text=message.body, flair_css_class="purpleflair")
+                            subs = getSubscriberCountFromChannelName(message.body.lower())
                         else:
-                            name = getChannelNameFromID(message.body)
-                            r.set_flair(subreddit="asmr", item=user, flair_text=name, flair_css_class="purpleflair")
+                            subs = getSubscriberCountFromChannelID(message.body)
 
-                        message.reply("Verification has been sucessful! Your flair should be applied within a few minutes. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
-                        print "Verified and set flair!"
+                        if int(subs) >= 1000:
+                            if gotfromname:
+                                r.set_flair(subreddit="asmr", item=user, flair_text=message.body, flair_css_class="purpleflair")
+                            else:
+                                name = getChannelNameFromID(message.body)
+                                r.set_flair(subreddit="asmr", item=user, flair_text=name, flair_css_class="purpleflair")
+
+                            message.reply("Verification has been sucessful! Your flair should be applied within a few minutes. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
+                            print "Verified and set flair!"
+                        else:
+                            message.reply("Unfortunately you need to have 1000 youtube subscribers to be awarded with flair. You only have " + str(subs) + " at the momnent, but try again once you reach 1000!")
+                            print "flair verification failed - not enough subs"
                     else:
-                        message.reply("Unfortunately you need to have 1000 youtube subscribers to be awarded with flair. You only have " + str(subs) + " at the momnent, but try again once you reach 1000!")
-                        print "flair verification failed - not enough subs"
+                        message.reply("I couldn't see the verification message in your channel description. Please make sure you include the exact phrase '**Hey \\/r/asmr mods!**' in your youtube channel description so I can verify that you own that channel. You should remove the verification message once you're verified.")
+                        print "flair verification failed - no verification message"
                 else:
-                    message.reply("I couldn't see the verification message in your channel description. Please make sure you include the exact phrase '**Hey \\/r/asmr mods!**' in your youtube channel description so I can verify that you own that channel. You should remove the verification message once you're verified.")
-                    print "flair verification failed - no verification message"
-            else:
-                message.reply("""
-Sorry, I couldn't find that channel. You can use either the channel name (eg 'asmrtess') or the channel ID (the messy part in the youtube link - go to your page and get just the ID from the URL in the format youtube.com/user/<ID>). Sending either the username OR the ID should work. 
+                    message.reply("""
+    Sorry, I couldn't find that channel. You can use either the channel name (eg 'asmrtess') or the channel ID (the messy part in the youtube link - go to your page and get just the ID from the URL in the format youtube.com/channel/<ID>). Sending either the username OR the ID should work. 
                 
-Please make sure the name is exactly correct. See [the wiki page](/r/asmr/wiki/flair_requests) for instructions. If you're still having problems, please [message the human mods](https://www.reddit.com/message/compose?to=%2Fr%2Fasmr)""")
-                print "flair verification failed - channel not found"
-        elif(message.subject == "delete flair"): #delete flair
-            if message.body == "delete flair":
-                r.delete_flair(subreddit="asmr", user=user)
-                message.reply("Your flair has been deleted. To apply for flair again, use [this link.](https://www.reddit.com/message/compose?to=asmr_bot&subject=flair%20request&message=enter your channel name here)")
-                print "flair deleted"
-        elif("post reply" not in message.subject):
-            print "command not recognised."
-            message.reply("Sorry - I don't recognise that command.If you have any feedback, please message /u/theonefoster.")
+    Please make sure the name is exactly correct. See [the wiki page](/r/asmr/wiki/flair_requests) for instructions. If you're still having problems, please [message the human mods](https://www.reddit.com/message/compose?to=%2Fr%2Fasmr)""")
+                    print "flair verification failed - channel not found"
+            elif(message.subject == "delete flair"): #delete flair
+                if message.body == "delete flair":
+                    r.delete_flair(subreddit="asmr", user=user)
+                    message.reply("Your flair has been deleted. To apply for flair again, use [this link.](https://www.reddit.com/message/compose?to=asmr_bot&subject=flair%20request&message=enter your channel name here)")
+                    print "flair deleted"
+            elif("post reply" not in message.subject) and ("comment reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
+                print "command not recognised."
+                message.reply("Sorry - I don't recognise that command.If you have any feedback, please message /u/theonefoster.")
         message.mark_as_read()
 
-def userIsActive(username):
+def userIsActive(username):#TODO
     return True
 
-print ("Logging in..")
+
+def userIsShadowbanned(username):
+    try:
+        user = r.get_redditor(user_name)
+        return False
+    except:
+        return True
+
 r = login()
 subreddit = r.get_subreddit("asmr")
 
@@ -393,10 +434,13 @@ while True:
         asmrbot()
         time.sleep(10)
         r.handler.clear_cache() 
-    except:
+    except Exception,e:
+        print str(e)
         try:
-            login()
-        except:
+            r = login()
+            
+        except Exception,f:
+            print str(f)
+            print ("Sleeping..")
             time.sleep(120)
-
     
