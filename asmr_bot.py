@@ -39,6 +39,9 @@ sql.commit()
 
 
 MODLIST = ['theonefoster', 'nvadergir', 'zimm3rmann', 'youngnreckless', 'mahi-mahi', "asmr_bot", "sidecarfour", "harrietpotter"]
+
+VIEWEDMODQUEUE = []
+
 BANNEDCHANNELS = [
     'UC_Jm39jFO9cH8KB9GIW54kg' # "ASMR Casual" / "letsASMR" - for faking giveaways, vote manipulation, commenting on own submissions
     ]
@@ -52,11 +55,15 @@ The [meta] tag is intended for posts which relate specifically to subjects conce
 SBEXPLAIN = """
 Hey OP! Unfortunately you appear to be [shadowbanned](https://www.reddit.com/r/AskReddit/comments/11ggji/can_someone_please_explain_to_me_what_shadow/) site-wide on reddit. The most likely reason for this is posting many links to a single (usually your own) channel or website, which goes against reddiquette and is considered spamming, although there are other possible reasons. You can try [contacting reddit admins](https://www.reddit.com/message/compose?to=%2Fr%2Freddit.com) to see if they will reverse it - otherwise everything you post (including comments) will remain invisible to non-moderators. 
 
+You can verify your shadowban by logging out and trying to view your userpage - if it says "page not found", you know that you've been shadowbanned. 
+
 This is a site-wide ban implemented by the admins and outside the control of the moderators of /r/asmr. If you haven't already, it is recommended that you read up on [reddit's guidelines on self-promotion](https://www.reddit.com/wiki/selfpromotion) and the [spam FAQ](https://www.reddit.com/wiki/faq#wiki_what_constitutes_spam.3F) (it'll only take a few minutes!) Thanks for your interest!
 """
 
 SBEXPLAIN_MSG = """
 Hey! You are receiving this message because you just commented in /r/asmr, but unfortunately you appear to be [shadowbanned](https://www.reddit.com/r/AskReddit/comments/11ggji/can_someone_please_explain_to_me_what_shadow/) site-wide on reddit. The most likely reason for this is posting many links to a single (usually your own) channel or website, which goes against reddiquette and is considered spamming, although there are other possible reasons. You can try [contacting reddit admins](https://www.reddit.com/message/compose?to=%2Fr%2Freddit.com) to see if they will reverse it - otherwise everything you post (including comments and submissions) will remain invisible to non-moderators. 
+
+You can verify your shadowban by logging out and trying to view your userpage - if it says "page not found", you know that you've been shadowbanned. 
 
 This is a site-wide ban implemented by the admins and outside the control of the moderators of /r/asmr. If you haven't already, it is recommended that you read up on [reddit's guidelines on self-promotion](https://www.reddit.com/wiki/selfpromotion) and the [spam FAQ](https://www.reddit.com/wiki/faq#wiki_what_constitutes_spam.3F) (it'll only take a few minutes!) Thanks for your interest!
 """
@@ -85,6 +92,7 @@ This submission has been removed because the youtube channel it links to is bann
 def getYoutubeData(input,part,val): #input = search value, part=where to search, val=return value
      #use this to replace the many functions below.
      #part should be either snippet or statistics.
+     #TODO: finish this and test it
      URL = ("https://www.googleapis.com/youtube/v3/videos?part=" & part & "&id=" + input + "&key=" &gBrowserKey)
      videoInfo = json.loads(urllib2.urlopen(URL).read())
      items = videoInfo[u'items']
@@ -234,22 +242,22 @@ def getModQueue():
        modqueue = r.get_mod_queue(subreddit="asmr", fetch=True)
 
        for item in modqueue:
-            print("New modqueue item!")
-            try:
-                user = r.get_redditor(item.author.name, fetch=True)
-                a = user._has_fetched
-                print a
-
-            except: #if user is shadowbanned the above will throw HTTPError (404)
-                print ("Replying to shadowbanned user..")
-                
-                if item.fullname.startswith("t3"):  #submission
-                    item.add_comment(SBEXPLAIN).distinguish()
-                    item.remove(False)
-                elif item.fullname.startswith("t1"):
-                    r.send_message(recipient=item.author, subject="Shadowban notification", message=SBEXPLAIN_MSG)
-                    item.remove(False)
-                item.clicked = True
+           if item.fullname not in VIEWEDMODQUEUE:
+               print("New modqueue item!")
+               VIEWEDMODQUEUE.append(item.fullname)
+               
+               try:
+                   user = r.get_redditor(item.author.name, fetch=True)
+               except: #if user is shadowbanned the above will throw HTTPError (404)
+                   print ("Replying to shadowbanned user " + item.author.name)
+               
+                   if item.fullname.startswith("t3"):  #submission
+                       item.add_comment(SBEXPLAIN).distinguish()
+                       item.remove(False)
+                   elif item.fullname.startswith("t1"): #comment
+                       r.send_message(recipient=item.author, subject="Shadowban notification", message=SBEXPLAIN_MSG)
+                       item.remove(False)
+                   item.clicked = True
     
 
 def parseComments():
