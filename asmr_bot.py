@@ -13,22 +13,8 @@ import sqlite3
 import re
 import random
 import shelve
-import string
+import string # <- it's stupid that I need to do this.
 
-#PRAW details
-appUserAgent = 'a bot to assist in the moderation of /r/asmr. developer:/u/theonefoster'
-appID = 'removed' #removed this information as it should not be in the public domain. Bot will not run without it, but you can replace it with your own keys.
-appSecret = 'removed'
-appURI = 'https://127.0.0.1:65010/authorize_callback'
-appRefreshToken = 'removed' # doesn't expire
-
-changed = True
-vidIDregex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
-toplist = shelve.open("topPosts",'c')
-
-#gdata details
-gApiKey = "removed"
-gBrowserKey  = "removed"
 
 print "Opening database.."
 sql = sqlite3.connect('sql.db')
@@ -53,7 +39,7 @@ The [meta] tag is intended for posts which relate specifically to subjects conce
 """
 
 SBEXPLAIN = """
-Hey OP! Unfortunately you appear to be [shadowbanned](https://www.reddit.com/r/AskReddit/comments/11ggji/can_someone_please_explain_to_me_what_shadow/) site-wide on reddit. The most likely reason for this is posting many links to a single (usually your own) channel or website, which goes against reddiquette and is considered spamming, although there are other possible reasons. You can try [contacting reddit admins](https://www.reddit.com/message/compose?to=%2Fr%2Freddit.com) to see if they will reverse it - otherwise everything you post (including comments) will remain invisible to non-moderators. 
+Hey OP! Unfortunately you appear to be [shadowbanned](https://www.reddit.com/r/AskReddit/comments/11ggji/can_someone_please_explain_to_me_what_shadow/) site-wide on reddit. The most likely reason for this is posting many links to a single (usually your own) channel or website, which goes against [reddiquette](https://www.reddit.com/wiki/reddiquette) and is considered spamming, although there are other possible reasons. You can try [contacting reddit admins](https://www.reddit.com/message/compose?to=%2Fr%2Freddit.com) to see if they will reverse it - otherwise everything you post (including comments) will remain invisible to non-moderators. 
 
 You can verify your shadowban by logging out and trying to view your userpage - if it says "page not found", you know that you've been shadowbanned. 
 
@@ -61,7 +47,7 @@ This is a site-wide ban implemented by the admins and outside the control of the
 """
 
 SBEXPLAIN_MSG = """
-Hey! You are receiving this message because you just commented in /r/asmr, but unfortunately you appear to be [shadowbanned](https://www.reddit.com/r/AskReddit/comments/11ggji/can_someone_please_explain_to_me_what_shadow/) site-wide on reddit. The most likely reason for this is posting many links to a single (usually your own) channel or website, which goes against reddiquette and is considered spamming, although there are other possible reasons. You can try [contacting reddit admins](https://www.reddit.com/message/compose?to=%2Fr%2Freddit.com) to see if they will reverse it - otherwise everything you post (including comments and submissions) will remain invisible to non-moderators. 
+Hey! You are receiving this message because you just commented in /r/asmr, but unfortunately you appear to be [shadowbanned](https://www.reddit.com/r/AskReddit/comments/11ggji/can_someone_please_explain_to_me_what_shadow/) site-wide on reddit. The most likely reason for this is posting many links to a single (usually your own) channel or website, which goes against [reddiquette](https://www.reddit.com/wiki/reddiquette) and is considered spamming, although there are other possible reasons. You can try [contacting reddit admins](https://www.reddit.com/message/compose?to=%2Fr%2Freddit.com) to see if they will reverse it - otherwise everything you post (including comments and submissions) will remain invisible to non-moderators. 
 
 You can verify your shadowban by logging out and trying to view your userpage - if it says "page not found", you know that you've been shadowbanned. 
 
@@ -93,18 +79,21 @@ def getYoutubeData(input,part,val): #input = search value, part=where to search,
      #use this to replace the many functions below.
      #part should be either snippet or statistics.
      #TODO: finish this and test it
-     URL = ("https://www.googleapis.com/youtube/v3/videos?part=" & part & "&id=" + input + "&key=" &gBrowserKey)
+     URL = ("https://www.googleapis.com/youtube/v3/videos?part=" & part & "&id=" + input + "&key=" + gBrowserKey)
      videoInfo = json.loads(urllib2.urlopen(URL).read())
      items = videoInfo[u'items']
      itemsDic = items[0]
      rtndic = itemsDic[val] #does this work? Might need the u
 
+     #TODO JUST PUT THE JSON DICTIONARY INTO A GLOBAL VARIABLE OFC
+     
+     #when I start a comment it looks like a hastag #TODO #input #yolo
 
      return -1
 
 def getYoutubeVideoTitleFromVideoID(videoID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" &gBrowserKey)
+        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" + gBrowserKey)
 
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
@@ -118,7 +107,7 @@ def getYoutubeVideoTitleFromVideoID(videoID): #value is the type of info to retu
 
 def getYoutubeChannelNameFromVideoID(videoID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" &gBrowserKey)
+        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" + gBrowserKey)
 
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
@@ -140,7 +129,7 @@ def getYoutubeChannelNameFromVideoID(videoID): #value is the type of info to ret
 
 def getYoutubeChannelIDFromVideoID(videoID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" &gBrowserKey)
+        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" + gBrowserKey)
 
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
@@ -154,7 +143,7 @@ def getYoutubeChannelIDFromVideoID(videoID): #value is the type of info to retur
 
 def getYoutubeChannelDescriptionFromName(ChannelName): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&forUsername=" + ChannelName + "&key=" &gBrowserKey)
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&forUsername=" + ChannelName + "&key=" + gBrowserKey)
 
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
@@ -168,7 +157,7 @@ def getYoutubeChannelDescriptionFromName(ChannelName): #value is the type of inf
 
 def getYoutubeChannelDescriptionFromID(ChannelID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + ChannelID + "&key=" &gBrowserKey)
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + ChannelID + "&key=" + gBrowserKey)
 
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
@@ -182,7 +171,7 @@ def getYoutubeChannelDescriptionFromID(ChannelID): #value is the type of info to
 
 def getSubscriberCountFromChannelName(ChannelName): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername=" + ChannelName + "&key=" &gBrowserKey)
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername=" + ChannelName + "&key=" + gBrowserKey)
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
         itemsDic = items[0]
@@ -195,7 +184,7 @@ def getSubscriberCountFromChannelName(ChannelName): #value is the type of info t
 
 def getChannelNameFromID(ID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + ID + "&key=" &gBrowserKey)
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + ID + "&key=" + gBrowserKey)
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
         itemsDic = items[0]
@@ -208,7 +197,7 @@ def getChannelNameFromID(ID): #value is the type of info to return
 
 def getSubscriberCountFromChannelID(ID): #value is the type of info to return
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&id=" + ID + "&key=" &gBrowserKey)
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&id=" + ID + "&key=" + gBrowserKey)
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
         itemsDic = items[0]
@@ -224,11 +213,10 @@ def redditUserActiveEnoughForFlair(username):
 
 def asmrbot():
     parseComments()
-    checkChannel()
+    checkChannel()    
     #getTopSubmissions()
     replyToMessages()
     getModQueue()
-
 
 def login():
     print ("logging in..")
@@ -330,10 +318,10 @@ def checkChannel():
                     print "exception on removal of submission " & submission.short_link & " - " & str(e)
 
 def getTopSubmissions():
-    #submissions = subreddit.get_top_from_all(limit = 700)
-    
-    #addedcount = 0  ###### REMOVE COMMENTS AND RUN TO UPDATE DB
-    #totalcount = 0
+#    submissions = subreddit.get_top_from_all(limit = 750)
+#    
+#    addedcount = 0  ###### REMOVE COMMENTS AND RUN TO UPDATE DB
+#    totalcount = 0
 #
 #    for submission in submissions:
 #        totalcount += 1
@@ -341,24 +329,24 @@ def getTopSubmissions():
 #        if (".youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
 #                
 #            try:
-#                if addedcount == 70:
-#                    result = False
 #                result = vidIDregex.split(submission.url)
 #                vidID = result[5]
-#                channelName = getYoutubeChannelInfoFromVideoID(vidID, "NAME")
-#                channelTitle = getYoutubeChannelInfoFromVideoID(vidID, "TITLE")
-#                if (channelName != -1) and (channelTitle != -1):
-#                    toplist[str(addedcount)] = {"URL" : submission.url, "Channel": channelName, "Title": channelTitle}
-#                    toplist.sync()
+#                channelName = getYoutubeChannelNameFromVideoID(vidID)
+#                vidTitle = getYoutubeVideoTitleFromVideoID(vidID)
+#                if (channelName != -1) and (vidTitle != -1):
+#                    toplist[str(addedcount)] = {"URL" : submission.url, "Channel": channelName, "Title": vidTitle, "Reddit Link": submission.permalink }
 #                    addedcount += 1
+#                else:
+#                    print "hmm"
 #            except:
 #                print "Exception!"
-#
+
+#    toplist.sync()
 #    print "total videos: " + str(addedcount) #471
 
-    rand = random.randint(1, 471)
+    rand = random.randint(1, 507)
 
-    rtn = "How about [" + toplist[str(rand)]["Title"] + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? If you don't like this video, reply with ""!recommend"" and I'll find you another one."
+    rtn = "How about [" + toplist[str(rand)]["Title"] + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
 
     return filter(lambda x: x in string.printable, rtn) # removes stupid unicode characters
 
