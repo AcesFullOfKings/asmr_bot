@@ -514,11 +514,7 @@ def getNumberOfVideosFromChannelName(name):
 
 def addWarning(post): #post is a reddit thing (comment or submission)
     user = post.author.name
-    cardinal = "?"
-    #curWar.execute("DELETE FROM warnings WHERE name=?", [user])
-    #sqlWar.commit()
-    #print "deleted."
-    #time.sleep(10000)
+    cardinal = "?" #just for printing to console
 
     curWar.execute("SELECT * FROM warnings WHERE name=?", [user])
     result = curWar.fetchone()
