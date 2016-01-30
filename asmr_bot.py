@@ -295,7 +295,7 @@ def replyToMessages():
                                     message.reply("Verification has been sucessful! Your flair should be applied within a few minutes. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
                                     print "Verified and set flair for " + user 
                                 else:
-                                    message.reply("Unfortunately your channel needs to have at least 12 published videos to be eligible for subreddit flair, but you've only published " + videoCount + " so far. Thanks for applying though, and feel free to check back once you've published 12 videos.")
+                                    message.reply("Unfortunately your channel needs to have at least 12 published videos to be eligible for subreddit flair, but you've only published " + str(videoCount) + " so far. Thanks for applying though, and feel free to check back once you've published 12 videos.")
                                     print "flair verification for " + channelName + " failed - not enough published videos."
                             else:
                                 message.reply("Unfortunately your channel needs to be at least 6 months (182 days) old to be eligible for subreddit flair. Thanks for applying, and feel free to check back when your channel is old enough!")
@@ -378,7 +378,7 @@ def isBadTitle(title):
     match = False
     if not isTriggering:
         for phrase in BadTitlePhrases:
-            if phrase in title:
+            if (not match) and (phrase in title): #short circuits for efficiency once match is found
                 match = True
     return match
 
@@ -404,4 +404,3 @@ while True:
             print str(f)
             print ("Sleeping..")
             time.sleep(60) # usually rate limits or 503. 
-    
