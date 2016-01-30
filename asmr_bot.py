@@ -86,7 +86,6 @@ def daysSinceYoutubeChannelCreation(channelName):
 
             channelDate = datetime.date(year=int(year),month=int(month),day=int(day))
             return datetime.datetime.today().toordinal() - channelDate.toordinal()
-
         except Exception,e:
             return -1
     else:
@@ -153,7 +152,6 @@ def parseComments():
                 commentAuthor = comment.author.name.lower()
                 commentBody = comment.body.lower()
 
-                # print ('Scanning new comment by ' + commentAuthor + '...')
                 if (commentAuthor in MODLIST and commentAuthor != "asmr_bot"):
                     if ('!bot-met' in commentBody):
                         print ("Comment found! Replying to " + commentAuthor)
@@ -181,10 +179,6 @@ def parseComments():
                         comment.remove(False)
                         parent = r.get_info(thing_id=comment.parent_id)
                         addWarning(parent)
-                    # elif("!bot-ban" in commentBody):
-                    #    print ("Comment found! Replying to " + commentAuthor)
-                    #    comment.remove(False)
-                    #    submissionID = comment.parent_id
 
             except AttributeError: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
                  print "Attribute Error! Comment was probably deleted."
@@ -198,7 +192,6 @@ def checkSubmissions():
             cur.execute("INSERT INTO doneSubmissions VALUES(?)", [submission.id])
             
             # for each new submission..
-
             if(titleHasTwoTags(submission.title)):
                 submission.remove(False)
                 submission.add_comment(TWOTAGSCOMMENT).distinguish()
@@ -229,7 +222,6 @@ def titleHasTwoTags(title):
 
 def updateTopSubmissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
     submissions = subreddit.get_top_from_all(limit = 750)
-    
     addedcount = 0
     totalcount = 0
 
@@ -237,7 +229,6 @@ def updateTopSubmissions(): # updates recommendation database. Doesn't usually n
         totalcount += 1
         print ("Got submission " + submission.id + "(" + str(totalcount) + ")")
         if (".youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
-                
             try:
                 result = vidIDregex.split(submission.url)
                 vidID = result[5]
@@ -256,9 +247,7 @@ def updateTopSubmissions(): # updates recommendation database. Doesn't usually n
 
 def recommendTopSubmission():
     # updateTopSubmissions() # uncomment this line and run to update database. Or just call the function somewhere.
-
     rand = random.randint(1, 507)
-
     rtn = "How about [" + toplist[str(rand)]["Title"] + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
 
     return filter(lambda x: x in string.printable, rtn) # removes stupid unicode characters
@@ -325,7 +314,6 @@ Please make sure the name is exactly correct. See [the wiki page](/r/asmr/wiki/f
 def userIsActive(username):# TODO
     return True
 
-
 def userIsShadowbanned(username):
     try:
         user = r.get_redditor(user_name=username, fetch=True)
@@ -384,7 +372,6 @@ def isBadTitle(title):
 
 # ----------------------------------------------------
 # ----------------------------------------------------
-# ----------------------------------------------------
 
 r = login()
 subreddit = r.get_subreddit("asmr")
@@ -399,9 +386,7 @@ while True:
         print str(e)
         try:
             r = login()
-            
         except Exception,f:
             print str(f)
             print ("Sleeping..")
             time.sleep(60) # usually rate limits or 503. 
-    
