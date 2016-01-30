@@ -1,4 +1,4 @@
-#using /u/asmr_bot 
+# using /u/asmr_bot 
 
 import praw
 import time
@@ -12,164 +12,78 @@ import shelve
 import string # <-- it's stupid that I need to do this
 import asmr_bot_data
 
-#PRAW details
-appUserAgent = asmr_bot_data.appUserAgent
-appID = asmr_bot_data.appID
-appSecret = asmr_bot_data.appSecret
-appURI = asmr_bot_data.appURI
-appRefreshToken = asmr_bot_data.appRefreshToken
+d = asmr_bot_data # d for data
+
+# PRAW details
+appUserAgent = d.appUserAgent
+appID = d.appID
+appSecret = d.appSecret
+appURI = d.appURI
+appRefreshToken = d.appRefreshToken
 changed = True
 vidIDregex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
 toplist = shelve.open("topPosts",'c')
 
-#gdata details
-gApiKey = asmr_bot_data.gApiKey
-gBrowserKey  = asmr_bot_data.gBrowserKey
+# gdata details
+gApiKey = d.gApiKey
+gBrowserKey  = d.gBrowserKey
 
-#global variables
+# global variables
 MODLIST = ['theonefoster', 'nvadergir', 'zimm3rmann', 'youngnreckless', 'mahi-mahi', 'asmr_bot', 'sidecarfour', 'harrietpotter']
 VIEWEDMODQUEUE = []
-BadTitlePhrases = asmr_bot_data.BadTitlePhrases
-BANNEDCHANNELS = asmr_bot_data.BANNEDCHANNELS
+BadTitlePhrases = d.BadTitlePhrases
+BANNEDCHANNELS = d.BANNEDCHANNELS
 
-#Messages
-METAEXPLAIN = asmr_bot_data.METAEXPLAIN
-SBEXPLAIN = asmr_bot_data.SBEXPLAIN
-SBEXPLAIN_MSG = asmr_bot_data.SBEXPLAIN_MSG
-MUSEXPLAIN = asmr_bot_data.MUSEXPLAIN
-TITLEEXPLAIN = asmr_bot_data.TITLEEXPLAIN
-BANNEDCHANNELCOMMENT = asmr_bot_data.BANNEDCHANNELCOMMENT
-TWOTAGSCOMMENT = asmr_bot_data.TWOTAGSCOMMENT
-BANNEDCHANNELCOMMENT = asmr_bot_data.BANNEDCHANNELCOMMENT
-BADTITLECOMMENT = asmr_bot_data.BADTITLECOMMENT
-UNLISTEDCOMMENT = asmr_bot_data.UNLISTEDCOMMENT
+# Messages
+METAEXPLAIN = d.METAEXPLAIN
+SBEXPLAIN = d.SBEXPLAIN
+SBEXPLAIN_MSG = d.SBEXPLAIN_MSG
+MUSEXPLAIN = d.MUSEXPLAIN
+TITLEEXPLAIN = d.TITLEEXPLAIN
+BANNEDCHANNELCOMMENT = d.BANNEDCHANNELCOMMENT
+TWOTAGSCOMMENT = d.TWOTAGSCOMMENT
+BANNEDCHANNELCOMMENT = d.BANNEDCHANNELCOMMENT
+BADTITLECOMMENT = d.BADTITLECOMMENT
+UNLISTEDCOMMENT = d.UNLISTEDCOMMENT
 
 # Open sql databases
 print "Opening databases.."
-sqlWar = sqlite3.connect('warnings.db') #for warnings database (bad if corrupted)
+sqlWar = sqlite3.connect('warnings.db') # for warnings database (bad if corrupted)
 curWar = sqlWar.cursor()
 curWar.execute("CREATE TABLE IF NOT EXISTS warnings(NAME TEXT, WARNINGS INTEGER)")
 sqlWar.commit()
 
-sql = sqlite3.connect('sql.db') #for everything else (doesn't matter too much if corrupted)
+sql = sqlite3.connect('sql.db') # for everything else (doesn't matter too much if corrupted)
 cur = sql.cursor()
 cur.execute("CREATE TABLE IF NOT EXISTS doneComments(ID TEXT)") 
 cur.execute("CREATE TABLE IF NOT EXISTS donesubmissions(ID TEXT)")
 sql.commit()
 
-def getYoutubeVideoTitleFromVideoID(videoID): #value is the type of info to return
+def getYoutubeVideoData(location, part, input_type, input_val, return_val): # part=where to search, input = search value, val=return value
+
+    # read like "from LOCATION, get the PART where INPUT_TYPE is INPUT_VAL and return RETURN_VAL
+    # where location is channel/video, part is statistics/snippet/status, type is ID or fromUsername, val is the search value, return value is the data you want
+     
+    input_val = filter(lambda x: x <> " ", input_val)
+
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" + gBrowserKey)
+        URL = ("https://www.googleapis.com/youtube/v3/" + location + "?part=" + part + "&" + input_type + "=" + input_val + "&key=" + gBrowserKey)
         videoInfo = json.loads(urllib2.urlopen(URL).read())
         items = videoInfo[u'items']
-        itemsDic = items[0]
-        snippet = itemsDic[u'snippet']
-        return snippet[u'title']
+        snippet = items[0][unicode(part)]
+        rtn = snippet[unicode(return_val)]
+        return rtn
     except:
         return -1
 
-def getYoutubeChannelNameFromVideoID(videoID): #value is the type of info to return
-    try:
-        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" + gBrowserKey)
-        videoInfo = json.loads(urllib2.urlopen(URL).read())
-        items = videoInfo[u'items']
-        itemsDic = items[0]
-        snippet = itemsDic[u'snippet']
-        rtnvalue = snippet[u'channelTitle']
-        return rtnvalue
-    except:
-        return -1
-
-def getYoutubeChannelIDFromVideoID(videoID): #value is the type of info to return
-    try:
-        URL = ("https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videoID + "&key=" + gBrowserKey)
-        videoInfo = json.loads(urllib2.urlopen(URL).read())
-        items = videoInfo[u'items']
-        itemsDic = items[0]
-        snippet = itemsDic[u'snippet']
-        return snippet[u'channelId']
-    except:
-        return -1
-
-def getYoutubeChannelDescriptionFromName(ChannelName): #value is the type of info to return
-    try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&forUsername=" + ChannelName + "&key=" + gBrowserKey)
-        videoInfo = json.loads(urllib2.urlopen(URL).read())
-        items = videoInfo[u'items']
-        itemsDic = items[0]
-        snippet = itemsDic[u'snippet']
-        description = snippet[u'description']
-        return description
-    except:
-        return -1
-
-def getYoutubeChannelDescriptionFromID(ChannelID): #value is the type of info to return
-    try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + ChannelID + "&key=" + gBrowserKey)
-        videoInfo = json.loads(urllib2.urlopen(URL).read())
-        items = videoInfo[u'items']
-        itemsDic = items[0]
-        snippet = itemsDic[u'snippet']
-        description = snippet[u'description']
-        return description
-    except:
-        return -1
-
-def getSubscriberCountFromChannelName(ChannelName): #value is the type of info to return
-    try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername=" + ChannelName + "&key=" + gBrowserKey)
-        videoInfo = json.loads(urllib2.urlopen(URL).read())
-        items = videoInfo[u'items']
-        itemsDic = items[0]
-        statistics = itemsDic[u'statistics']
-        subs = statistics[u'subscriberCount']
-        return int(subs)
-    except:
-        return -1
-
-def getChannelNameFromID(ID): #value is the type of info to return
-    try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id=" + ID + "&key=" + gBrowserKey)
-        videoInfo = json.loads(urllib2.urlopen(URL).read())
-        items = videoInfo[u'items']
-        itemsDic = items[0]
-        snippet = itemsDic[u'snippet']
-        title = snippet[u'title']
-        return title
-    except:
-        return -1
-
-def getSubscriberCountFromChannelID(ID): #value is the type of info to return
-    try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&id=" + ID + "&key=" + gBrowserKey)
-        videoInfo = json.loads(urllib2.urlopen(URL).read())
-        items = videoInfo[u'items']
-        itemsDic = items[0]
-        statistics = itemsDic[u'statistics']
-        subs = statistics[u'subscriberCount']
-        return int(subs)
-    except:
-        return -1
-
-def getChannelCreationDateFromID(ID): #value is the type of info to return
-    try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&forUsername=" + ID + "&key=" + gBrowserKey)
-        videoInfo = json.loads(urllib2.urlopen(URL).read())
-        items = videoInfo[u'items']
-        itemsDic = items[0]
-        snippet = itemsDic[u'snippet']
-        publishedDate = snippet[u'publishedAt']
-        return publishedDate
-    except:
-        return -1
-
-def daysSinceYoutubeChannelCreation(name):
-    creationDate = getChannelCreationDateFromID(name)
+def daysSinceYoutubeChannelCreation(channelName):
+    creationDate = getYoutubeVideoData("channels", "snippet", "forUsername", channelName, "publishedAt")
     if (creationDate <> -1):
         try:
             year = creationDate[0:4]
             month = creationDate[5:7]
             day = creationDate[8:10]
+
             channelDate = datetime.date(year=int(year),month=int(month),day=int(day))
             return datetime.datetime.today().toordinal() - channelDate.toordinal()
 
@@ -178,50 +92,28 @@ def daysSinceYoutubeChannelCreation(name):
     else:
         return -1
 
-def getNumberOfVideosFromChannelName(name):
-    try:
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername=" + name + "&key=" + gBrowserKey)
-        videoInfo = json.loads(urllib2.urlopen(URL).read())
-        items = videoInfo[u'items']
-        itemsDic = items[0]
-        statistics = itemsDic[u'statistics']
-        numVids = statistics[u'videoCount']
-        return int(numVids)
-    except:
-        return -1
-
-def videoIsUnlisted(ID): #value is the type of info to return
-    try:
-        URL = ("https://www.googleapis.com/youtube/v3/videos?part=status&id=" + ID + "&key=" + gBrowserKey)
-        videoInfo = json.loads(urllib2.urlopen(URL).read())
-        items = videoInfo[u'items']
-        itemsDic = items[0]
-        status = itemsDic[u'status']
-        publishedDate = status[u'privacyStatus']
-        return publishedDate == "unlisted"
-    except:
-        return False
+def videoIsUnlisted(ID):
+    return getYoutubeVideoData("videos", "status", "id", ID, "privacyStatus") == "unlisted"
 
 def redditUserActiveEnoughForFlair(username):
-    user = r.get_redditor(username) #TODO: build this
+    user = r.get_redditor(username) # TODO: build this
 
 def asmrbot():
-    #removed comments to see time taken for each bot task. 
-    #starttime = time.time()
-    #print "Start: " + str(starttime)
+    # starttime = time.time()
+    # print "Start: " + str(starttime)
     parseComments()
-    #print "Comments took: " + str(time.time()-starttime)
-    #starttime = time.time()
+    # print "Comments took: " + str(time.time()-starttime)
+    # starttime = time.time()
     checkSubmissions()
-    #print "Submissions took: " + str(time.time()-starttime)
-    #starttime = time.time()
-    #getTopSubmissions()
+    # print "Submissions took: " + str(time.time()-starttime)
+    # starttime = time.time()
+    # getTopSubmissions()
     replyToMessages()
-    #print "Messages took: " + str(time.time()-starttime)
-    #starttime = time.time()
+    # print "Messages took: " + str(time.time()-starttime)
+    # starttime = time.time()
     getModQueue()
-    #print "Modqueue took: " + str(time.time()-starttime)
-    #starttime = time.time()
+    # print "Modqueue took: " + str(time.time()-starttime)
+    # starttime = time.time()
 
 def login():
     print ("logging in..")
@@ -233,23 +125,25 @@ def login():
 
 def getModQueue():
        modqueue = r.get_mod_queue(subreddit="asmr")
+
        for item in modqueue:
            if item.fullname not in VIEWEDMODQUEUE:
                print("New modqueue item!")
                VIEWEDMODQUEUE.append(item.fullname)
+
                if userIsShadowbanned(item.author.name):
                    print ("Replying to shadowbanned user " + item.author.name)
                
-                   if item.fullname.startswith("t3"):  #submission
+                   if item.fullname.startswith("t3"):  # submission
                        item.remove(False)
                        item.add_comment(SBEXPLAIN).distinguish()
-                   elif item.fullname.startswith("t1"): #comment
+                   elif item.fullname.startswith("t1"): # comment
                        item.remove(False)
                        r.send_message(recipient=item.author, subject="Shadowban notification", message=SBEXPLAIN_MSG)
                    item.clicked = True
 
 def parseComments():
-    comments = subreddit.get_comments(limit=15) #sends request
+    comments = subreddit.get_comments(limit=15) # sends request
 
     for comment in comments:
         cur.execute("SELECT * FROM doneComments WHERE ID=?", [comment.id])
@@ -259,7 +153,7 @@ def parseComments():
                 commentAuthor = comment.author.name.lower()
                 commentBody = comment.body.lower()
 
-                #print ('Scanning new comment by ' + commentAuthor + '...')
+                # print ('Scanning new comment by ' + commentAuthor + '...')
                 if (commentAuthor in MODLIST and commentAuthor != "asmr_bot"):
                     if ('!bot-met' in commentBody):
                         print ("Comment found! Replying to " + commentAuthor)
@@ -287,7 +181,7 @@ def parseComments():
                         comment.remove(False)
                         parent = r.get_info(thing_id=comment.parent_id)
                         addWarning(parent)
-                    #elif("!bot-ban" in commentBody):
+                    # elif("!bot-ban" in commentBody):
                     #    print ("Comment found! Replying to " + commentAuthor)
                     #    comment.remove(False)
                     #    submissionID = comment.parent_id
@@ -303,7 +197,7 @@ def checkSubmissions():
         if not cur.fetchone(): 
             cur.execute("INSERT INTO doneSubmissions VALUES(?)", [submission.id])
             
-            #for each new submission..
+            # for each new submission..
 
             if(titleHasTwoTags(submission.title)):
                 submission.remove(False)
@@ -317,9 +211,9 @@ def checkSubmissions():
                 try:
                     result = vidIDregex.split(submission.url)
                     vidID = result[5]
-                    channelID = getYoutubeChannelIDFromVideoID(vidID)
+                    channelID = getYoutubeVideoData("videos", "snippet", "id", vidID, "channelId")
                     if channelID in BANNEDCHANNELS:
-                        submission.remove(False) #checks for banned youtube channels
+                        submission.remove(False) # checks for banned youtube channels
                         submission.add_comment(BANNEDCHANNELCOMMENT).distinguish()
                         print "Removing submission " + submission.short_link + " (banned youtube channel).."
                     elif videoIsUnlisted(vidID):
@@ -333,7 +227,7 @@ def titleHasTwoTags(title):
     twoTagsRegex = re.compile('.*\[(intentional|unintentional|media|article|discussion|question|meta)\].*\[(intentional|unintentional|media|article|discussion|question|meta)\].*', re.I)
     return (re.search(twoTagsRegex, title) != None) # search the title for two tags; if two are found return true, else return false
 
-def updateTopSubmissions(): #updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
+def updateTopSubmissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
     submissions = subreddit.get_top_from_all(limit = 750)
     
     addedcount = 0
@@ -347,8 +241,8 @@ def updateTopSubmissions(): #updates recommendation database. Doesn't usually ne
             try:
                 result = vidIDregex.split(submission.url)
                 vidID = result[5]
-                channelName = getYoutubeChannelNameFromVideoID(vidID)
-                vidTitle = getYoutubeVideoTitleFromVideoID(vidID)
+                channelName = getYoutubeVideoData("videos", "snippet", "id", vidID, "channelTitle")
+                vidTitle = getYoutubeVideoData("videos", "snippet", "id", vidID, "title")
                 if (channelName != -1) and (vidTitle != -1):
                     toplist[str(addedcount)] = {"URL" : submission.url, "Channel": channelName, "Title": vidTitle, "Reddit Link": submission.permalink}
                     addedcount += 1
@@ -358,51 +252,50 @@ def updateTopSubmissions(): #updates recommendation database. Doesn't usually ne
                 print "Other exception - " + e
 
     toplist.sync()
-    print "total videos: " + str(addedcount) #471
+    print "total videos: " + str(addedcount) # 471
 
 def recommendTopSubmission():
-    #updateTopSubmissions() #uncomment this line and run to update database. Or just call the function somewhere.
+    # updateTopSubmissions() # uncomment this line and run to update database. Or just call the function somewhere.
+
     rand = random.randint(1, 507)
+
     rtn = "How about [" + toplist[str(rand)]["Title"] + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
+
     return filter(lambda x: x in string.printable, rtn) # removes stupid unicode characters
 
 def replyToMessages():
-    messages = r.get_unread(limit=20)
+    messages = r.get_unread(limit=100)
+
     for message in messages:
         if not message.was_comment:
             user = message.author.name
             print "Message dectected from " + user
 
-            if ("!recommend" in message.body.lower()): #recommendation
+            if ("!recommend" in message.body.lower()): # recommendation
                 print "Recommending popular video"
                 messageToSend = recommendTopSubmission()
                 message.reply(messageToSend)
-            elif(message.subject == "flair request" or message.subject == "re: flair request"): #set flair
-                gotfromname = True
+            elif(message.subject == "flair request" or message.subject == "re: flair request"): # set flair
                 channelName = message.body
-                des = getYoutubeChannelDescriptionFromName(message.body) #des as in description
+                des = getYoutubeVideoData("channels", "snippet", "forUsername", channelName, "description") # des as in description #tested
             
                 if des == -1:
-                    des = getYoutubeChannelDescriptionFromID(message.body)
-                    gotfromname = False
-                    channelName = getChannelNameFromID(message.body)
+                    des = getYoutubeVideoData("channels", "snippet", "id", message.body, "description")
+                    channelName = getYoutubeVideoData("channels", "snippet", "id", message.body, "title")
+
                 if des != -1:
                     if "hey /r/asmr mods!" in des.lower():
-                        if gotfromname:
-                            subs = getSubscriberCountFromChannelName(channelName)
-                        else:
-                            subs = getSubscriberCountFromChannelID(message.body)
+                        subs = int(getYoutubeVideoData("channels", "statistics", "forUsername", channelName, "subscriberCount"))
 
                         if subs >= 1000:
                             if daysSinceYoutubeChannelCreation(channelName) > 182:
-
-                                if getNumberOfVideosFromChannelName(channelName) >= 12:
-
+                                videoCount = int(getYoutubeVideoData("channels", "statistics", "forUsername", channelName, "videoCount"))
+                                if videoCount >= 12:
                                     r.set_flair(subreddit="asmr", item=user, flair_text=channelName, flair_css_class="purpleflair")
                                     message.reply("Verification has been sucessful! Your flair should be applied within a few minutes. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
                                     print "Verified and set flair for " + user 
                                 else:
-                                    message.reply("Unfortunately your channel needs to have at least 12 published videos to be eligible for subreddit flair. Thanks for applying, and feel free to check back once you've published 12 videos.")
+                                    message.reply("Unfortunately your channel needs to have at least 12 published videos to be eligible for subreddit flair, but you've only published " + videoCount + " so far. Thanks for applying though, and feel free to check back once you've published 12 videos.")
                                     print "flair verification for " + channelName + " failed - not enough published videos."
                             else:
                                 message.reply("Unfortunately your channel needs to be at least 6 months (182 days) old to be eligible for subreddit flair. Thanks for applying, and feel free to check back when your channel is old enough!")
@@ -419,7 +312,7 @@ Sorry, I couldn't find that channel. You can use either the channel name (eg 'as
                 
 Please make sure the name is exactly correct. See [the wiki page](/r/asmr/wiki/flair_requests) for instructions. If you're still having problems, please [message the human mods](https://www.reddit.com/message/compose?to=%2Fr%2Fasmr)""")
                     print "flair verification failed - channel not found. Message was: " + message.body
-            elif(message.subject == "delete flair"): #delete flair
+            elif(message.subject == "delete flair"): # delete flair
                 if message.body == "delete flair":
                     r.delete_flair(subreddit="asmr", user=user)
                     message.reply("Your flair has been deleted. To apply for flair again, use [this link.](https://www.reddit.com/message/compose?to=asmr_bot&subject=flair%20request&message=enter your channel name here)")
@@ -429,8 +322,9 @@ Please make sure the name is exactly correct. See [the wiki page](/r/asmr/wiki/f
                 message.reply("Sorry, I don't recognise that command. If you're trying to request a flair, read [the instructions here](https://www.reddit.com/r/asmr/wiki/flair_requests). For other commands you can send me, read the [asmr_bot wiki page](https://www.reddit.com/r/asmr/wiki/asmr_bot). If you have any questions or feedback, please message /u/theonefoster.")
         message.mark_as_read()
 
-def userIsActive(username):#TODO
+def userIsActive(username):# TODO
     return True
+
 
 def userIsShadowbanned(username):
     try:
@@ -442,9 +336,13 @@ def userIsShadowbanned(username):
         print "Unknown exception when checking shadowban for user " + username + " - exception code: \"" + str(e) + "\""
         return False
 
-def addWarning(post): #post is a reddit thing (comment or submission)
+def addWarning(post): # post is a reddit thing (comment or submission)
     user = post.author.name
     ordinal = "?"
+    # curWar.execute("DELETE FROM warnings WHERE name=?", [user])
+    # sqlWar.commit()
+    # print "deleted."
+    # time.sleep(10000)
 
     curWar.execute("SELECT * FROM warnings WHERE name=?", [user])
     result = curWar.fetchone()
@@ -484,9 +382,9 @@ def isBadTitle(title):
                 match = True
     return match
 
-#----------------------------------------------------
-#----------------------------------------------------
-#----------------------------------------------------
+# ----------------------------------------------------
+# ----------------------------------------------------
+# ----------------------------------------------------
 
 r = login()
 subreddit = r.get_subreddit("asmr")
@@ -501,7 +399,9 @@ while True:
         print str(e)
         try:
             r = login()
+            
         except Exception,f:
             print str(f)
             print ("Sleeping..")
-            time.sleep(60) #usually rate limits or 503. 
+            time.sleep(60) # usually rate limits or 503. 
+    
