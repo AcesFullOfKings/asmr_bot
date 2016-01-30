@@ -202,11 +202,11 @@ def checkSubmissions():
             if(titleHasTwoTags(submission.title)):
                 submission.remove(False)
                 submission.add_comment(TWOTAGSCOMMENT).distinguish()
-                print "Removed submission " + submission.ID + " for having two flair tags."
+                print "Removed submission " + submission.id + " for having two flair tags."
             elif isBadTitle(submission.title):
                 submission.remove(False)
                 submission.add_comment(BADTITLECOMMENT).distinguish()
-                print "Removed submission " + submission.ID + " for having a bad title."
+                print "Removed submission " + submission.id + " for having a bad title."
             elif ("youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
                 try:
                     result = vidIDregex.split(submission.url)
@@ -404,3 +404,4 @@ while True:
             print str(f)
             print ("Sleeping..")
             time.sleep(60) # usually rate limits or 503. 
+    
