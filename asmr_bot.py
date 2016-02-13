@@ -25,7 +25,6 @@ changed = True
 vidIDregex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
 toplist = shelve.open("topPosts",'c')
 
-
 # gdata details
 gApiKey = d.gApiKey
 gBrowserKey  = d.gBrowserKey
@@ -94,6 +93,21 @@ def daysSinceYoutubeChannelCreation(channelName):
     else:
         return -1
 
+def daysSinceYoutubeChannelCreationFromID(channelID):
+    creationDate = getYoutubeVideoData("channels", "snippet", "id", channelID, "publishedAt")
+    if (creationDate != -1):
+        try:
+            year = creationDate[0:4]
+            month = creationDate[5:7]
+            day = creationDate[8:10]
+
+            channelDate = datetime.date(year=int(year),month=int(month),day=int(day))
+            return datetime.datetime.today().toordinal() - channelDate.toordinal()
+        except Exception as e:
+            return -1
+    else:
+        return -1
+
 def videoIsUnlisted(ID):
     return getYoutubeVideoData("videos", "status", "id", ID, "privacyStatus") == "unlisted"
 
@@ -132,21 +146,21 @@ def checkComments():
 
                 if (commentAuthor in MODLIST and commentAuthor != "asmr_bot"):
                     if ('!bot-met' in commentBody):
-                        print("Comment found! Replying to " + commentAuthor + "(bad meta post)")
+                        print("Comment found! Replying to " + commentAuthor + " (bad meta post)")
                         comment.remove(False)
                         submissionID = comment.parent_id
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
                         submission.add_comment(METAEXPLAIN).distinguish()
                     elif ('!bot-mus' in commentBody):
-                        print("Comment found! Replying to " + commentAuthor + "(music)")
+                        print("Comment found! Replying to " + commentAuthor + " (music)")
                         comment.remove(False)
                         submissionID = comment.parent_id
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
                         TLcomment = submission.add_comment(MUSEXPLAIN).distinguish()
                     elif ('!bot-title' in commentBody):
-                        print("Comment found! Replying to " + commentAuthor + "(bad title)")
+                        print("Comment found! Replying to " + commentAuthor + " (bad title)")
                         comment.remove(False)
                         submissionID = comment.parent_id
                         submission = r.get_submission(submission_id=submissionID[3:])
@@ -258,20 +272,36 @@ def replyToMessages():
                 messageToSend = recommendTopSubmission()
                 message.reply(messageToSend)
             elif(message.subject == "flair request" or message.subject == "re: flair request"): # set flair
+
+                gotFromID = False
                 channelName = message.body
                 des = getYoutubeVideoData("channels", "snippet", "forUsername", channelName, "description") # des as in description #tested
             
                 if des == -1:
                     des = getYoutubeVideoData("channels", "snippet", "id", message.body, "description")
                     channelName = getYoutubeVideoData("channels", "snippet", "id", message.body, "title")
+                    gotFromID = True
 
                 if des != -1:
                     if "hey /r/asmr mods!" in des.lower():
-                        subs = int(getYoutubeVideoData("channels", "statistics", "forUsername", channelName, "subscriberCount"))
+                        if gotFromID:
+                            subs = int(getYoutubeVideoData("channels", "statistics", "id", message.body, "subscriberCount"))
+                        else:
+                            subs = int(getYoutubeVideoData("channels", "statistics", "forUsername", channelName, "subscriberCount"))
 
                         if subs >= 1000:
-                            if daysSinceYoutubeChannelCreation(channelName) > 182:
-                                videoCount = int(getYoutubeVideoData("channels", "statistics", "forUsername", channelName, "videoCount"))
+                            if gotFromID:
+                                age = daysSinceYoutubeChannelCreationFromID(message.body)
+                            else:
+                                age = daysSinceYoutubeChannelCreation(channelName)
+
+                            if age > 182:
+
+                                if gotFromID:
+                                    videoCount = int(getYoutubeVideoData("channels", "statistics", "id", message.body, "videoCount"))
+                                else:
+                                    videoCount = int(getYoutubeVideoData("channels", "statistics", "forUsername", channelName, "videoCount"))
+
                                 if videoCount >= 12:
                                     r.set_flair(subreddit="asmr", item=user, flair_text=channelName, flair_css_class="purpleflair")
                                     message.reply("Verification has been sucessful! Your flair should be applied within a few minutes. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
@@ -340,7 +370,7 @@ def addWarning(post): # post is a reddit 'thing' (comment or submission)
         curWar.execute("DELETE FROM warnings WHERE name=?", [user])
         curWar.execute("INSERT INTO warnings VALUES(?,?)",  [user, 3])
         note = "Auto-ban: Permanent - " + post.permalink
-        msg = "You been automatically banned because of your post [here](" + post.permalink + "). This is your third warning, meaning you are now permanently banned."
+        msg = "You have been automatically banned because of your post [here](" + post.permalink + "). This is your third warning, meaning you are now permanently banned."
         subreddit.add_ban(post.author, note=note, ban_message=msg)
         ordinal = "Third"
     elif result[1] == 1:
