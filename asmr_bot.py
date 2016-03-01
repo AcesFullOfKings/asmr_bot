@@ -9,11 +9,11 @@ import sqlite3
 import re
 import random
 import shelve
-import string # <-- it's stupid that I need to do this
-import asmr_bot_data
+import string
 import requests
+import traceback
 
-d = asmr_bot_data # d for data
+import asmr_bot_data as d # d for data
 
 # PRAW details
 appUserAgent = d.appUserAgent
@@ -75,7 +75,7 @@ def getYoutubeVideoData(location, part, input_type, input_val, return_val):
         rtn = snippet[return_val]
         return rtn
     except Exception as e:
-        print(str(e))
+        traceback.print_exc()
         return -1
 
 def daysSinceYoutubeChannelCreation(channelName):
@@ -122,7 +122,16 @@ def checkModQueue():
                print("New modqueue item!")
                VIEWEDMODQUEUE.append(item.fullname)
 
-               if userIsShadowbanned(item.author.name):
+               useless_report = True
+
+               for report in item.user_reports:
+                   if not (report[0] is None or "own content" in report[0] or report[0] == "Spam"): #report is None if no reason given
+                       useless_report = False
+               if useless_report:
+                   item.clicked = True
+                   item.approve()
+                   print("Item approved - ignored \"own content\"/spam/blank report")
+               elif userIsShadowbanned(item.author.name):
                    print("Replying to shadowbanned user " + item.author.name)
                
                    if item.fullname.startswith("t3"):  # submission
@@ -183,12 +192,14 @@ def checkComments():
                                 r.send_message(commentAuthor, "Failed command", "The !bot-purge command can only be used in reply to a top-level comment. This is due to reddit API restrictions.")
                         except Exception as e:
                             print("Exception when purging comment tree. Parent was " + parent.id)
-                            print(str(e))
-                            comment.remove(False)
+                            traceback.print_exc()
                             r.send_message(commentAuthor, "Failed command", "Your purge command failed for an unknown reason. Your comment was removed.")
+                        finally:
+                            comment.remove(False)
 
             except AttributeError: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
-                 print("Attribute Error! Comment was probably deleted.")
+                print("Attribute Error! Comment was probably deleted.")
+                traceback.print_exc()
 
 def checkSubmissions():
     submissions = subreddit.get_new(limit=15)
@@ -206,6 +217,7 @@ def checkSubmissions():
             elif isBadTitle(submission.title):
                 submission.remove(False)
                 submission.add_comment(BADTITLECOMMENT).distinguish()
+                r.send_message("theonefoster", "Bad Title - Submission removed", submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
                 print("Removed submission " + submission.id + " for having a bad title.")
             elif ("youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
                 try:
@@ -222,6 +234,7 @@ def checkSubmissions():
                         print("Removing submission " + submission.short_link + " (unlisted video)..")
                 except Exception as e:
                     print("exception on removal of submission " + submission.short_link + " - " + str(e))
+                    traceback.print_exc()
 
 def titleHasTwoTags(title):
     twoTagsRegex = re.compile('.*\[(intentional|unintentional|media|article|discussion|question|meta)\].*\[(intentional|unintentional|media|article|discussion|question|meta)\].*', re.I)
@@ -248,6 +261,7 @@ def updateTopSubmissions(): # updates recommendation database. Doesn't usually n
                     print("Youtube Exception. Bad link?")
             except Exception as e:
                 print("Other exception - " + str(e))
+                traceback.print_exc()
 
     toplist.sync()
     print("total videos: " + str(addedcount)) # 471
@@ -304,7 +318,7 @@ def replyToMessages():
 
                                 if videoCount >= 12:
                                     r.set_flair(subreddit="asmr", item=user, flair_text=channelName, flair_css_class="purpleflair")
-                                    message.reply("Verification has been sucessful! Your flair should be applied within a few minutes. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
+                                    message.reply("Verification has been sucessful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
                                     print("Verified and set flair for " + user)
                                 else:
                                     message.reply("Unfortunately your channel needs to have at least 12 published videos to be eligible for subreddit flair, but you've only published " + str(videoCount) + " so far. Thanks for applying though, and feel free to check back once you've published 12 videos.")
@@ -345,6 +359,7 @@ def userIsShadowbanned(username):
         return True
     except Exception as e:
         print("Unknown exception when checking shadowban for user " + username + " - exception code: \"" + str(e) + "\"")
+        traceback.print_exc()
         return False
 
 def addWarning(post): # post is a reddit 'thing' (comment or submission)
@@ -394,7 +409,7 @@ def isBadTitle(title):
                 match = True
     return match
 
-def purgeThread(comment): # yay recursion woop woop
+def purgeThread(comment): # yay recursion
     for c in comment.replies:
         purgeThread(c)
         c.remove(False)
@@ -446,10 +461,10 @@ while True:
         r.handler.clear_cache()
         time.sleep(5)
     except Exception as e:
-        print (str(e))
+        traceback.print_exc()
         try:
             r = login()
         except Exception as f:
-            print (str(f))
+            traceback.print_exc()
             print("Sleeping..")
-            time.sleep(60) # usually rate limits or 503.   
+            time.sleep(30) # usually rate limits or 503. Sleeping reduces reddit load.
