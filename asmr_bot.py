@@ -9,11 +9,11 @@ import sqlite3
 import re
 import random
 import shelve
-import string
+import string # <-- it's stupid that I need to do this
 import requests
 import traceback
 
-import asmr_bot_data as d # d for data
+import asmr_bot_data as d #d for data
 
 # PRAW details
 appUserAgent = d.appUserAgent
@@ -75,7 +75,7 @@ def getYoutubeVideoData(location, part, input_type, input_val, return_val):
         rtn = snippet[return_val]
         return rtn
     except Exception as e:
-        traceback.print_exc()
+        #traceback.print_exc()
         return -1
 
 def daysSinceYoutubeChannelCreation(channelName):
@@ -123,15 +123,17 @@ def checkModQueue():
                VIEWEDMODQUEUE.append(item.fullname)
 
                useless_report = True
+               p = ""
 
                for report in item.user_reports:
-                   if not (report[0] is None or "own content" in report[0] or report[0] == "Spam"): #report is None if no reason given
+                   if item.fullname.startswith("t1") or not (report[0] is None or report[0] == "Spam" or "own content" in report[0] or "self promotion" in report[0] or "self-promotion" in report[0]): #report is None if no reason given
                        useless_report = False
-               if useless_report:
-                   item.clicked = True
-                   item.approve()
-                   print("Item approved - ignored \"own content\"/spam/blank report")
-               elif userIsShadowbanned(item.author.name):
+                       p = report[0]
+               #if useless_report:
+                   #item.clicked = True
+                   #item.approve()
+                   #print("Item approved - ignored \"own content\"/spam/blank report. (Reason: '" + p + "')")
+               if userIsShadowbanned(item.author.name): #was elif, see comment above
                    print("Replying to shadowbanned user " + item.author.name)
                
                    if item.fullname.startswith("t3"):  # submission
@@ -189,7 +191,7 @@ def checkComments():
                                 purgeThread(parent)
                             else:
                                 comment.remove(False)
-                                r.send_message(commentAuthor, "Failed command", "The !bot-purge command can only be used in reply to a top-level comment. This is due to reddit API restrictions.")
+                                r.send_message(commentAuthor, "Failed command", "The !bot-purge command can only be used in reply to a top-level comment. This is due to reddit API restrictions.") #todo: wat
                         except Exception as e:
                             print("Exception when purging comment tree. Parent was " + parent.id)
                             traceback.print_exc()
@@ -344,7 +346,7 @@ Please make sure the name is exactly correct. See [the wiki page](/r/asmr/wiki/f
                     message.reply("Your flair has been deleted. To apply for flair again, use [this link.](https://www.reddit.com/message/compose?to=asmr_bot&subject=flair%20request&message=enter your channel name here)")
                     print("Flair deleted for " + user)
             elif("post reply" not in message.subject) and ("comment reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
-                print("Command not recognised. Message was " + message)
+                print("Command not recognised. Message was " + message.body)
                 message.reply("Sorry, I don't recognise that command. If you're trying to request a flair, read [the instructions here](https://www.reddit.com/r/asmr/wiki/flair_requests). For other commands you can send me, read the [asmr_bot wiki page](https://www.reddit.com/r/asmr/wiki/asmr_bot). If you have any questions or feedback, please message /u/theonefoster.")
         message.mark_as_read()
 
@@ -409,7 +411,7 @@ def isBadTitle(title):
                 match = True
     return match
 
-def purgeThread(comment): # yay recursion
+def purgeThread(comment): # yay recursion woop woop
     for c in comment.replies:
         purgeThread(c)
         c.remove(False)
@@ -460,11 +462,21 @@ while True:
         sql.commit()
         r.handler.clear_cache()
         time.sleep(5)
-    except Exception as e:
-        traceback.print_exc()
+    except praw.errors.HTTPException:
         try:
             r = login()
         except Exception as f:
-            traceback.print_exc()
+            print("Login failed: " + str(f))
+            print ("Sleeping....")
+            time.sleep(30)
+    except Exception as e:
+        print(str(e))
+        #traceback.print_exc()
+        try:
+            r = login()
+        except Exception as f:
+            print(str(f))
+            #if "HTTP" not in str(f):
+                #traceback.print_exc()
             print("Sleeping..")
             time.sleep(30) # usually rate limits or 503. Sleeping reduces reddit load.
