@@ -433,15 +433,16 @@ def login():
 
 def removeSticky():
     sticky = subreddit.get_sticky()
-    if "Free-For-All Friday" in sticky.title:
-        sticky.unsticky()
-    else:
-        try:
+    try:
+        if "Free-For-All Friday" in sticky.title or "Tech Tuesday" in sticky.title:
+            sticky.unsticky()
+        else:
             sticky = subreddit.get_sticky(bottom=True)
-            if "Free-For-All Friday" in sticky.title:
+            if "Free-For-All Friday" in sticky.title or "Tech Tuesday" in sticky.title:
                 sticky.unsticky()
-        except praw.errors.HTTPException as e: # if there's no bottom sticky it'll throw a 404 Not Found
-            pass
+    except praw.errors.HTTPException as e: # if there's no sticky it'll throw a 404 Not Found
+        pass
+
 
 def asmrbot():
     # starttime = time.time()
@@ -467,6 +468,7 @@ def asmrbot():
 r = login()
 subreddit = r.get_subreddit("asmr")
 schedule.every().saturday.at("18:00").do(removeSticky)
+schedule.every().wednesday.at("18:00").do(removeSticky)
 while True:
     try:
         asmrbot()
