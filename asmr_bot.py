@@ -1,17 +1,17 @@
-# using /u/asmr_bot 
+# for /u/asmr_bot 
 
 import praw
 import time
 import datetime
-#import urllib
-#import json
 import sqlite3
 import re
 import random
 import shelve
-import string # <-- it's stupid that I need to do this
+import string
 import requests
 import traceback
+
+import schedule
 
 import asmr_bot_data as d #d for data
 
@@ -186,7 +186,7 @@ def checkComments():
                         print("Comment found! Replying to " + commentAuthor + " (kill thread)")
                         try:
                             parent = r.get_info(thing_id=comment.parent_id)
-                            if parent.fullname.startswith("t1"):
+                            if parent.fullname.startswith("t1"):# TODO - this isn't necessary I think
                                 parent = getCommentFromSubmission(parent)
                                 purgeThread(parent)
                             else:
@@ -403,13 +403,11 @@ def addWarning(post): # post is a reddit 'thing' (comment or submission)
 
 def isBadTitle(title):
     title = title.lower()
-    isTriggering = ("[intentional]" in title or "[unintentional]" in title)
-    match = False
-    if isTriggering:
+    if ("[intentional]" in title or "[unintentional]" in title):
         for phrase in BadTitlePhrases:
-            if (not match) and (phrase in title): # (not match) short circuits for efficiency once match is found
-                match = True
-    return match
+            if phrase in title:
+                return True
+    return False
 
 def purgeThread(comment): # yay recursion woop woop
     for c in comment.replies:
@@ -419,19 +417,31 @@ def purgeThread(comment): # yay recursion woop woop
 
 def getCommentFromSubmission(comment): # it's completely fucking dumb that I have to do this
     s = comment.submission
-    b = comment.body
+    i = comment.id
     for c in s.comments:
-        if c.body == b:
+        if c.id == i:
             return c
     return None
 
 def login():
     print("logging in..")
-    r = praw.Reddit(appUserAgent)
+    r = praw.Reddit(appUserAgent, disable_update_check=True)
     r.set_oauth_app_info(appID,appSecret, appURI)
     r.refresh_access_information(appRefreshToken)
     print("logged in as " + str(r.user.name))
     return r
+
+def removeSticky():
+    sticky = subreddit.get_sticky()
+    if "Free-For-All Friday" in sticky.title:
+        sticky.unsticky()
+    else:
+        try:
+            sticky = subreddit.get_sticky(bottom=True)
+            if "Free-For-All Friday" in sticky.title:
+                sticky.unsticky()
+        except praw.errors.HTTPException as e: # if there's no bottom sticky it'll throw a 404 Not Found
+            pass
 
 def asmrbot():
     # starttime = time.time()
@@ -449,13 +459,14 @@ def asmrbot():
     checkModQueue()
     # print "Modqueue took: " + str(time.time()-starttime)
     # starttime = time.time()
+    schedule.run_pending()
 
 # ----------------------------------------------------
 # ----------------------------------------------------
 
 r = login()
 subreddit = r.get_subreddit("asmr")
-
+schedule.every().saturday.at("18:00").do(removeSticky)
 while True:
     try:
         asmrbot()
