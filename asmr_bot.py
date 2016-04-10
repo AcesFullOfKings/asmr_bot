@@ -10,6 +10,7 @@ import shelve
 import string
 import requests
 import traceback
+import queue
 
 import schedule
 
@@ -34,6 +35,8 @@ MODLIST = ['theonefoster', 'nvadergir', 'zimm3rmann', 'youngnreckless', 'mahi-ma
 VIEWEDMODQUEUE = []
 BadTitlePhrases = d.BadTitlePhrases
 BANNEDCHANNELS = d.BANNEDCHANNELS
+mod_queue_full = False #if bot is restarted it will wait for empty modqueue before full queue notifications begin
+unactioned_modqueue = queue.Queue(0)
 
 # Messages
 METAEXPLAIN = d.METAEXPLAIN
@@ -111,38 +114,66 @@ def daysSinceYoutubeChannelCreationFromID(channelID):
 def videoIsUnlisted(ID):
     return getYoutubeVideoData("videos", "status", "id", ID, "privacyStatus") == "unlisted"
 
-def redditUserActiveEnoughForFlair(username):
+def redditUserActiveEnoughForFlair(username): #TODO
     user = r.get_redditor(username)
 
 def checkModQueue():
-       modqueue = r.get_mod_queue(subreddit="asmr")
+    global mod_queue_full
+    global unactioned_modqueue
 
-       for item in modqueue:
-           if item.fullname not in VIEWEDMODQUEUE:
-               print("New modqueue item!")
-               VIEWEDMODQUEUE.append(item.fullname)
+    modqueue = list(r.get_mod_queue(subreddit="asmr", fetch=True))
 
-               useless_report = True
-               p = ""
+    for item in modqueue:
+        if item.fullname not in VIEWEDMODQUEUE:
+            print("New modqueue item!")
+            VIEWEDMODQUEUE.append(item.fullname)
 
-               for report in item.user_reports:
-                   if item.fullname.startswith("t1") or not (report[0] is None or report[0] == "Spam" or "own content" in report[0] or "self promotion" in report[0] or "self-promotion" in report[0]): #report is None if no reason given
-                       useless_report = False
-                       p = report[0]
-               #if useless_report:
-                   #item.clicked = True
-                   #item.approve()
-                   #print("Item approved - ignored \"own content\"/spam/blank report. (Reason: '" + p + "')")
-               if userIsShadowbanned(item.author.name): #was elif, see comment above
-                   print("Replying to shadowbanned user " + item.author.name)
-               
-                   if item.fullname.startswith("t3"):  # submission
-                       item.remove(False)
-                       item.add_comment(SBEXPLAIN).distinguish()
-                   elif item.fullname.startswith("t1"): # comment
-                       item.remove(False)
-                       r.send_message(recipient=item.author, subject="Shadowban notification", message=SBEXPLAIN_MSG)
-                   item.clicked = True
+            hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour + 6)%24)
+            min = str(time.struct_time(time.strptime(time.ctime())).tm_min)
+            scheduletime = hour+":"+min
+            
+            unactioned_modqueue.put(item)
+
+            schedule.every().day.at(scheduletime).do(checkOldModQueueItem)
+
+            useless_report = False
+            p = ""
+
+            for report in item.user_reports:
+                if (report[0] is None or report[0] == "Spam" or "own content" in report[0] or "self promotion" in report[0] or "self-promotion" in report[0]): #report is None if no reason given
+                    useless_report = True
+                    p = report[0]
+            if useless_report:
+                item.clicked = True
+                #item.ignore_reports()
+                print("Item approved - ignored \"own content\"/spam/blank report. (Reason: '" + p + "')")
+            elif userIsShadowbanned(item.author.name):
+                print("Replying to shadowbanned user " + item.author.name)
+             
+                if item.fullname.startswith("t3"):  # submission
+                    item.remove(False)
+                    item.add_comment(SBEXPLAIN).distinguish()
+                elif item.fullname.startswith("t1"): # comment
+                    item.remove(False)
+                    r.send_message(recipient=item.author, subject="Shadowban notification", message=SBEXPLAIN_MSG)
+                item.clicked = True
+            elif len(modqueue) >= 4:
+                if not mod_queue_full:
+                    print("Full modqueue detected! Messaging mods..")
+                    r.send_message("/r/asmr", "Modqueue items require attention!", "The modqueue has multiple unactioned items in it - please review them asap! \n\n https://www.reddit.com/r/asmr/about/modqueue/")
+                    mod_queue_full = True
+            else:
+                mod_queue_full = False
+
+def checkOldModQueueItem():
+    submission = unactioned_modqueue.get()
+    print("Ran scheduled task! time is " + str(time.ctime()))
+    modqueue = list(r.get_mod_queue(subreddit="asmr", fetch=True))
+    for item in modqueue:
+        if item.id == submission.id:
+            print("Modqueue item unactioned for 6 hours - messaging mods")
+            r.send_message("/r/asmr", "Unactioned Modqueue Item", "Attention - a modqueue item hasn't been actioned for 6 hours. Please review it asap! \n\n https://www.reddit.com/r/asmr/about/modqueue/")
+    return schedule.CancelJob
 
 def checkComments():
     comments = subreddit.get_comments(limit=15) # sends request
@@ -415,7 +446,7 @@ def purgeThread(comment): # yay recursion woop woop
         c.remove(False)
     comment.remove(False)
 
-def getCommentFromSubmission(comment): # it's completely fucking dumb that I have to do this
+def getCommentFromSubmission(comment):
     s = comment.submission
     i = comment.id
     for c in s.comments:
@@ -445,24 +476,15 @@ def removeSticky():
 
 
 def asmrbot():
-    # starttime = time.time()
-    # print "Start: " + str(starttime)
-    checkComments()
-    # print "Comments took: " + str(time.time()-starttime)
-    # starttime = time.time()
-    checkSubmissions()
-    # print "Submissions took: " + str(time.time()-starttime)
-    # starttime = time.time()
-    # getTopSubmissions()
-    replyToMessages()
-    # print "Messages took: " + str(time.time()-starttime)
-    # starttime = time.time()
+    #updateTopSubmissions()
+    #checkComments()
+    #checkSubmissions()
+    #replyToMessages()
     checkModQueue()
-    # print "Modqueue took: " + str(time.time()-starttime)
-    # starttime = time.time()
     schedule.run_pending()
 
 # ----------------------------------------------------
+# END OF FUNCTIONS
 # ----------------------------------------------------
 
 r = login()
@@ -484,12 +506,10 @@ while True:
             time.sleep(30)
     except Exception as e:
         print(str(e))
-        #traceback.print_exc()
+        traceback.print_exc()
         try:
             r = login()
         except Exception as f:
             print(str(f))
-            #if "HTTP" not in str(f):
-                #traceback.print_exc()
             print("Sleeping..")
             time.sleep(30) # usually rate limits or 503. Sleeping reduces reddit load.
