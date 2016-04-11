@@ -25,6 +25,7 @@ appRefreshToken = d.appRefreshToken
 changed = True
 vidIDregex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
 toplist = shelve.open("topPosts",'c')
+#data = shelve.open("data", 'c')
 
 # gdata details
 gApiKey = d.gApiKey
@@ -35,7 +36,7 @@ MODLIST = ['theonefoster', 'nvadergir', 'zimm3rmann', 'youngnreckless', 'mahi-ma
 VIEWEDMODQUEUE = []
 BadTitlePhrases = d.BadTitlePhrases
 BANNEDCHANNELS = d.BANNEDCHANNELS
-mod_queue_full = False #if bot is restarted it will wait for empty modqueue before full queue notifications begin
+mod_queue_full = True #if bot is restarted it will wait for empty modqueue before full queue notifications begin
 unactioned_modqueue = queue.Queue(0)
 
 # Messages
@@ -301,7 +302,7 @@ def updateTopSubmissions(): # updates recommendation database. Doesn't usually n
 
 def recommendTopSubmission():
     # updateTopSubmissions() # uncomment this line and run to update database. Or just call the function somewhere.
-    rand = random.randint(0, len(toplist))
+    rand = random.randint(0, len(toplist)-1)
     rtn = "How about [" + toplist[str(rand)]["Title"] + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
 
     return ''.join(char for char in rtn if char in string.printable) # removes stupid unicode characters
