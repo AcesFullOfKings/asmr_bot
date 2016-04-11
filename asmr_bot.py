@@ -301,7 +301,7 @@ def updateTopSubmissions(): # updates recommendation database. Doesn't usually n
 
 def recommendTopSubmission():
     # updateTopSubmissions() # uncomment this line and run to update database. Or just call the function somewhere.
-    rand = random.randint(1, 518)
+    rand = random.randint(0, len(toplist))
     rtn = "How about [" + toplist[str(rand)]["Title"] + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
 
     return ''.join(char for char in rtn if char in string.printable) # removes stupid unicode characters
@@ -477,9 +477,9 @@ def removeSticky():
 
 def asmrbot():
     #updateTopSubmissions()
-    #checkComments()
-    #checkSubmissions()
-    #replyToMessages()
+    checkComments()
+    checkSubmissions()
+    replyToMessages()
     checkModQueue()
     schedule.run_pending()
 
