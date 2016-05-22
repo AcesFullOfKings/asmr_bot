@@ -11,17 +11,18 @@ import string
 import requests
 import traceback
 import queue
+import theonefoster_bot
 
 import schedule
 
 import asmr_bot_data as d # d for data
 
 # PRAW details, other imported data
-appUserAgent = d.appUserAgent
-appID = d.appID
-appSecret = d.appSecret
-appURI = d.appURI
-appRefreshToken = d.appRefreshToken
+app_user_agent = d.appUserAgent
+app_id = d.appID
+app_secret = d.appSecret
+app_URI = d.appURI
+app_refresh_token = d.appRefreshToken
 watch_channel_id = d.watch_channel_id
 watch_msg_title = d.watch_msg_title
 watch_msg_body = d.watch_msg_body
@@ -200,30 +201,46 @@ def checkComments():
                 commentBody = comment.body.lower()
 
                 if (commentAuthor in MODLIST and commentAuthor != "asmr_bot"):
-                    if ('!bot-met' in commentBody):
+                    if ('!bot-meta' in commentBody):
                         print("Comment found! Replying to " + commentAuthor + " (bad meta post)")
-                        comment.remove(False)
+                        if commentAuthor == "theonefoster":
+                            my_comment = tof.get_info(thing_id = comment.fullname)
+                            my_comment.delete()
+                        else:
+                            comment.remove(False)
                         submissionID = comment.parent_id
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
                         submission.add_comment(METAEXPLAIN).distinguish(sticky=True)
                     elif ('!bot-mus' in commentBody):
                         print("Comment found! Replying to " + commentAuthor + " (music)")
-                        comment.remove(False)
+                        if commentAuthor == "theonefoster":
+                            my_comment = tof.get_info(thing_id = comment.fullname)
+                            my_comment.delete()
+                        else:
+                            comment.remove(False)
                         submissionID = comment.parent_id
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
                         TLcomment = submission.add_comment(MUSEXPLAIN).distinguish(sticky=True)
                     elif ('!bot-title' in commentBody):
                         print("Comment found! Replying to " + commentAuthor + " (bad title)")
-                        comment.remove(False)
+                        if commentAuthor == "theonefoster":
+                            my_comment = tof.get_info(thing_id = comment.fullname)
+                            my_comment.delete()
+                        else:
+                            comment.remove(False)
                         submissionID = comment.parent_id
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
                         TLcomment = submission.add_comment(TITLEEXPLAIN).distinguish(sticky=True)
                     elif ("!bot-warning" in commentBody):
                         print("Comment found! Replying to " + commentAuthor + " (add warning)")
-                        comment.remove(False)
+                        if commentAuthor == "theonefoster":
+                            my_comment = tof.get_info(thing_id = comment.fullname)
+                            my_comment.delete()
+                        else:
+                            comment.remove(False)
                         parent = r.get_info(thing_id=comment.parent_id)
                         addWarning(parent)
                     elif("!bot-purge" in commentBody):
@@ -234,7 +251,11 @@ def checkComments():
                                 parent = getCommentFromSubmission(parent)
                                 purgeThread(parent)
                             else:
-                                comment.remove(False)
+                                if commentAuthor == "theonefoster":
+                                    my_comment = tof.get_info(thing_id = comment.fullname)
+                                    my_comment.delete()
+                                else:
+                                    comment.remove(False)
                                 r.send_message(commentAuthor, "Failed command", "The !bot-purge command can only be used in reply to a top-level comment. This is due to reddit API restrictions.") #todo: wat
                         except Exception as e:
                             print("Exception when purging comment tree. Parent was " + parent.id)
@@ -539,7 +560,6 @@ def isBadTitle(title):
 def purgeThread(comment): # yay recursion woop woop
     for c in comment.replies:
         purgeThread(c)
-        c.remove(False)
     comment.remove(False)
 
 def getCommentFromSubmission(comment):
@@ -552,9 +572,9 @@ def getCommentFromSubmission(comment):
 
 def login():
     print("logging in..")
-    r = praw.Reddit(appUserAgent, disable_update_check=True)
-    r.set_oauth_app_info(appID,appSecret, appURI)
-    r.refresh_access_information(appRefreshToken)
+    r = praw.Reddit(app_user_agent, disable_update_check=True)
+    r.set_oauth_app_info(app_id,app_secret, app_URI)
+    r.refresh_access_information(app_refresh_token)
     print("logged in as " + str(r.user.name))
     return r
 
@@ -598,8 +618,6 @@ def clearVideoSubmissions():
 
     temp_dict = submissions_dict.copy()
     
-    print(submissions_dict)
-    
     for key in temp_dict.keys():
         if submissions_dict[key].created_utc < (time.time() - 7948800): #if submission was more than 3 months ago
             del submissions_dict[key]
@@ -625,12 +643,13 @@ def asmrbot():
 # ----------------------------------------------------
 
 r = login()
+tof = theonefoster_bot.login()
 subreddit = r.get_subreddit("asmr")
 
 schedule.every().saturday.at("18:00").do(removeSticky)
 schedule.every().wednesday.at("18:00").do(removeSticky)
 schedule.every().hour.do(clearUserSubmissions)
-schedule.every().day.do(clearVideoSubmissions)
+schedule.every().day.at("02:00").do(clearVideoSubmissions)
 
 while True:
     try:
