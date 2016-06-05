@@ -379,7 +379,7 @@ def checkSubmissions():
                     traceback.print_exc()
 
 def titleHasTwoTags(title):
-    twoTagsRegex = re.compile('.*\[(intentional|unintentional|media|article|discussion|question|meta)\].*\[(intentional|unintentional|media|article|discussion|question|meta)\].*', re.I)
+    twoTagsRegex = re.compile('.*\[(intentional|unintentional|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|media|article|discussion|question|meta|request)\].*', re.I)
     return (re.search(twoTagsRegex, title) != None) # search the title for two tags; if two are found return true, else return false
 
 def updateTopSubmissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
