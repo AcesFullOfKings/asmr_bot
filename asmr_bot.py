@@ -20,6 +20,7 @@ class my_submission_type():
     sub_permalink = ""
     sub_ID = ""
     channel_ID = ""
+    date_created = ""
 
 # PRAW details, other imported data
 app_user_agent = d.appUserAgent
@@ -338,6 +339,7 @@ def check_submissions():
                             my_sub.sub_permalink = submission.permalink
                             my_sub.sub_ID = submission.id
                             my_sub.channel_ID = channel_id
+                            my_sub.date_created = submission.created_utc
                             
                             recent_videos_copy = recent_video_data["videos"].copy()
                             recent_videos_copy[vid_id] = my_sub # add submission info to temporary dict
@@ -377,11 +379,6 @@ def check_submissions():
                                     subreddit.add_ban(submission.author, duration=1, note=note, ban_message=msg)
                                     r.send_message("/r/" + subreddit.display_name, "Ban Notification", "I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **1 day only**. \n\nLinks to the offending submissions:\n\n" + submissionlinks)
                                 else:
-                                    my_sub = my_submission_type()
-                                    my_sub.sub_permalink = submission.permalink
-                                    my_sub.sub_ID = submission.id
-                                    my_sub.channel_ID = channel_id
-
                                     d = user_submission_data["submissions"]  #copy dict
                                     l = d[submission.author.name] # get list of user submissions
                                     l.append(my_sub) #append submission to list
@@ -631,17 +628,17 @@ def clear_user_submissions():
     submissions = user_submission_data["submissions"]
     users = list(submissions.keys())
     for user in users: 
-        submissionsbyuser = submissions[user] 
-        temp = submissionsbyuser.copy()
+        submissions_by_user = submissions[user] 
+        temp = submissions_by_user.copy()
         for s in temp:
-            if s.created_utc < (time.time()-1000): #if the submission was over 24 hours ago
-                submissionsbyuser.remove(s) # remove it from the list
-        if len(submissionsbyuser) == 0: # and if there are no submissions by that user in the past 24 hours
-            del submissions[user] # remove the user's key from the dict
-            
-        else:
-            if submissions[user] != submissionsbyuser:
-                submissions[user] = submissionsbyuser # update submissions log
+            if s.date_created < (time.time()-86400): #if the submission was over 24 hours ago
+                submissions_by_user.remove(s) # remove it from the list
+
+        if len(submissions_by_user) == 0: # and if there are no submissions by that user in the past 24 hours
+            del submissions[user] # remove the user's key from the dict       
+        elif len(submissions[user]) != len(submissions_by_user):
+                submissions[user] = submissions_by_user # update submissions log
+
     user_submission_data["submissions"] = submissions
     user_submission_data.sync()
 
@@ -652,13 +649,15 @@ def update_seen_objects():
     seen_objects["comments"] = done_comments
     seen_objects.sync()
 
-def clear_video_submissions(): #doesn't work??
+def clear_video_submissions(): # maybe doesn't work??
     submissions_dict = recent_video_data["videos"]
 
-    dict_keys = submissions_dict.keys().copy()
+    dict_keys = list(submissions_dict.keys())
     
     for key in dict_keys:
-        if submissions_dict[key].created_utc < (time.time() - 7948800): #if submission was more than 3 months ago
+        if key == "t" and len(dict_keys) > 2:
+            del submissions_dict[key]
+        elif submissions_dict[key].date_created < (time.time() - 7948800): #if submission was more than 3 months ago
             del submissions_dict[key]
 
     recent_video_data["videos"] = submissions_dict
@@ -683,10 +682,10 @@ subreddit = r.get_subreddit("asmr")
 
 schedule.every().thursday.at("23:50").do(remove_ffaf)
 schedule.every().wednesday.at("18:00").do(remove_tech_tuesday)
-schedule.every(28).days.at("03:00").do(update_top_submissions) #once a month ish
+schedule.every(28).days.at("03:00").do(update_top_submissions) #once per month ish
 schedule.every().hour.do(clear_user_submissions)
 schedule.every().hour.do(update_seen_objects)
-schedule.every().day.at("02:00").do(clear_video_submissions)
+schedule.every().day.at("02:00").do(clear_video_submissions) #once per day
 
 while True:
     try:
