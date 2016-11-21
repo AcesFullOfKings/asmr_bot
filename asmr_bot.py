@@ -1,5 +1,4 @@
 # for /u/asmr_bot 
-
 import praw
 import time
 import datetime
@@ -11,11 +10,11 @@ import string
 import requests
 import traceback
 import queue
-import theonefoster_bot
 
 import schedule
 
 import asmr_bot_data as d # d for data
+import theonefoster_bot
 
 class my_submission_type():
     sub_permalink = ""
@@ -67,16 +66,19 @@ recent_video_data = shelve.open("recent_video_data", "c") # videos submitted ove
 seen_objects = shelve.open("seen_objects", "c") # to track which objects have been seen.
 
 if "videos" not in recent_video_data: # initialise dict
-    recent_video_data["videos"] = {}
+    recent_video_data["videos"] = {"t":"t"} # empty dict can cause problems. enter test data and remove later.
 
 if "submissions" not in user_submission_data: #initialise dict
-    user_submission_data["submissions"] = {}
+    user_submission_data["submissions"] = {"t":"t"} # empty dict can cause problems. enter test data and remove later.
 
-if "done_submissions" not in seen_objects:
+if "submissions" not in seen_objects:
     seen_objects["submissions"] = []
 
-if "done_submissions" not in seen_objects:
-    seen_objects["submissions"] = []
+if "comments" not in seen_objects:
+    seen_objects["comments"] = []
+
+user_submission_data.sync()
+recent_video_data.sync()
 
 # Open sql databases
 print("Opening databases..")
@@ -190,17 +192,19 @@ def check_comments():
 
     for comment in comments:
         if comment.id not in seen_objects["comments"]:
+            seen_comments = seen_objects["comments"]
             seen_objects["comments"].append(comment.id)
+            seen_objects["comments"] = seen_comments
             seen_objects.sync()
 
             try:
-                commentAuthor = comment.author.name.lower()
-                commentBody = comment.body.lower()
+                comment_author = comment.author.name.lower()
+                comment_body = comment.body.lower()
 
-                if (commentAuthor in MODLIST and commentAuthor != "asmr_bot"):
-                    if ('!bot-meta' in commentBody):
-                        print("Comment found! Replying to " + commentAuthor + " (bad meta post)")
-                        if commentAuthor == "theonefoster":
+                if (comment_author in MODLIST and comment_author != "asmr_bot"):
+                    if ('!bot-meta' in comment_body):
+                        print("Comment found! Replying to " + comment_author + " (bad meta post)")
+                        if comment_author == "theonefoster":
                             my_comment = tof.get_info(thing_id = comment.fullname)
                             my_comment.delete()
                         else:
@@ -209,9 +213,9 @@ def check_comments():
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
                         submission.add_comment(METAEXPLAIN).distinguish(sticky=True)
-                    elif ('!bot-mus' in commentBody):
-                        print("Comment found! Replying to " + commentAuthor + " (music)")
-                        if commentAuthor == "theonefoster":
+                    elif ('!bot-mus' in comment_body):
+                        print("Comment found! Replying to " + comment_author + " (music)")
+                        if comment_author == "theonefoster":
                             my_comment = tof.get_info(thing_id = comment.fullname)
                             my_comment.delete()
                         else:
@@ -220,9 +224,9 @@ def check_comments():
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
                         TLcomment = submission.add_comment(MUSEXPLAIN).distinguish(sticky=True)
-                    elif ('!bot-title' in commentBody):
-                        print("Comment found! Replying to " + commentAuthor + " (bad title)")
-                        if commentAuthor == "theonefoster":
+                    elif ('!bot-title' in comment_body):
+                        print("Comment found! Replying to " + comment_author + " (bad title)")
+                        if comment_author == "theonefoster":
                             my_comment = tof.get_info(thing_id = comment.fullname)
                             my_comment.delete()
                         else:
@@ -231,33 +235,33 @@ def check_comments():
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
                         TLcomment = submission.add_comment(TITLEEXPLAIN).distinguish(sticky=True)
-                    elif ("!bot-warning" in commentBody):
-                        print("Comment found! Replying to " + commentAuthor + " (add warning)")
-                        if commentAuthor == "theonefoster":
+                    elif ("!bot-warning" in comment_body):
+                        print("Comment found! Replying to " + comment_author + " (add warning)")
+                        if comment_author == "theonefoster":
                             my_comment = tof.get_info(thing_id = comment.fullname)
                             my_comment.delete()
                         else:
                             comment.remove(False)
                         parent = r.get_info(thing_id=comment.parent_id)
                         add_warning(parent)
-                    elif("!bot-purge" in commentBody):
-                        print("Comment found! Replying to " + commentAuthor + " (kill thread)")
+                    elif("!bot-purge" in comment_body):
+                        print("Comment found! Replying to " + comment_author + " (kill thread)")
                         try:
                             parent = r.get_info(thing_id=comment.parent_id)
                             if parent.fullname.startswith("t1"):# TODO - this isn't necessary I think
                                 parent = get_comment_from_submission(parent)
                                 purge_thread(parent)
                             else:
-                                if commentAuthor == "theonefoster":
+                                if comment_author == "theonefoster":
                                     my_comment = tof.get_info(thing_id = comment.fullname)
                                     my_comment.delete()
                                 else:
                                     comment.remove(False)
-                                r.send_message(commentAuthor, "Failed command", "The !bot-purge command can only be used in reply to a top-level comment. This is due to reddit API restrictions.") #todo: wat
+                                r.send_message(comment_author, "Failed command", "The !bot-purge command can only be used in reply to a top-level comment. This is due to reddit API restrictions.") #todo: wat
                         except Exception as e:
                             print("Exception when purging comment tree - "+str(e)+"\nParent was " + parent.id)
                             #traceback.print_exc()
-                            r.send_message(commentAuthor, "Failed command", "Your purge command failed for an unknown reason. Your comment was removed.")
+                            r.send_message(comment_author, "Failed command", "Your purge command failed for an unknown reason. Your comment was removed.")
                         finally:
                             comment.remove(False)
 
@@ -272,7 +276,9 @@ def check_submissions():
 
     for submission in submissions:
         if submission.id not in seen_objects["submissions"]: 
-            seen_objects["submissions"].append(submission.id)
+            seen_submissions = seen_objects["submissions"]
+            seen_submissions.append(submission.id)
+            seen_objects["submissions"] = seen_submissions
             seen_objects.sync()
             
             # for each new submission..
@@ -307,6 +313,8 @@ def check_submissions():
                             print("Removing submission " + submission.short_link + " (unlisted video)..")
                             removed = True
                         elif vid_id in recent_video_data["videos"]: #submission is repost
+                            if "t" in recent_video_data["videos"]:
+                                del recent_video_data["videos"]["t"] # remove filler data 
                             my_old_post = recent_video_data["videos"][vid_id]
                             try:
                                 old_post = r.get_info(thing_id="t3_" + my_old_post.sub_ID)
@@ -626,7 +634,7 @@ def clear_user_submissions():
         submissionsbyuser = submissions[user] 
         temp = submissionsbyuser.copy()
         for s in temp:
-            if s.created_utc < (time.time()-86400): #if the submission was over 24 hours ago
+            if s.created_utc < (time.time()-1000): #if the submission was over 24 hours ago
                 submissionsbyuser.remove(s) # remove it from the list
         if len(submissionsbyuser) == 0: # and if there are no submissions by that user in the past 24 hours
             del submissions[user] # remove the user's key from the dict
@@ -658,11 +666,11 @@ def clear_video_submissions(): #doesn't work??
 
 def asmr_bot():
 
-    #schedule.run_pending()
-    #check_comments()
+    schedule.run_pending()
+    check_comments()
     check_submissions()
-    #reply_to_messages()
-    #check_mod_queue()
+    reply_to_messages()
+    check_mod_queue()
 
 # ----------------------------------------------------
 # END OF FUNCTIONS
@@ -670,7 +678,8 @@ def asmr_bot():
 
 r = login()
 tof = theonefoster_bot.login()
-subreddit = r.get_subreddit("asmrmodtalk")
+del(theonefoster_bot)
+subreddit = r.get_subreddit("asmr")
 
 schedule.every().thursday.at("23:50").do(remove_ffaf)
 schedule.every().wednesday.at("18:00").do(remove_tech_tuesday)
@@ -682,17 +691,16 @@ schedule.every().day.at("02:00").do(clear_video_submissions)
 while True:
     try:
         asmr_bot()
-        r.handler.clear_cache()
-        time.sleep(5)
-    except praw.errors.HTTPException:
+    except praw.errors.HTTPException as e:
         try:
+            print("HTTP Exception: " + str(e))
             r = login()
         except Exception as f:
             print("Login failed: " + str(f))
             print ("Sleeping....")
             time.sleep(30)
     except Exception as e:
-        print(str(e))
+        print("Unknown exception: " + str(e))
         #traceback.print_exc()
         try:
             r = login()
@@ -700,3 +708,6 @@ while True:
             print(str(f))
             print("Sleeping..")
             time.sleep(30) # usually rate limits or 503. Sleeping reduces reddit load.
+    finally:
+        r.handler.clear_cache()
+        time.sleep(7) # reduces reddit load and unnecessary processor usage
