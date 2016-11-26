@@ -534,7 +534,7 @@ def user_is_shadowbanned(username):
 def submission_is_deleted(id):
     try:
         submission = r.get_submission(submission_id = id)
-        return (submission.author == None)
+        return (submission.author is None)
         return False
     except praw.errors.InvalidSubmission:
         return True
