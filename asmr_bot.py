@@ -67,10 +67,14 @@ recent_video_data = shelve.open("recent_video_data", "c") # videos submitted ove
 seen_objects = shelve.open("seen_objects", "c") # to track which objects have been seen.
 
 if "videos" not in recent_video_data: # initialise dict
-    recent_video_data["videos"] = {"t":"t"} # empty dict can cause problems. enter test data and remove later.
+    fake = my_submission_type()
+    fake.date_created = time.time()
+    recent_video_data["videos"] = {"id": fake} # empty dict can cause problems. enter test data and remove later.
 
 if "submissions" not in user_submission_data: #initialise dict
-    user_submission_data["submissions"] = {"t":"t"} # empty dict can cause problems. enter test data and remove later.
+    fake = my_submission_type()
+    fake.date_created = time.time()
+    user_submission_data["submissions"] = {"un": [fake]} # empty dict can cause problems. enter test data and remove later.
 
 if "submissions" not in seen_objects:
     seen_objects["submissions"] = []
@@ -202,7 +206,7 @@ def check_comments():
                 comment_author = comment.author.name.lower()
                 comment_body = comment.body.lower()
 
-                if (comment_author in MODLIST and comment_author != "asmr_bot"):
+                if (comment_author in MODLIST):
                     if ('!bot-meta' in comment_body):
                         print("Comment found! Replying to " + comment_author + " (bad meta post)")
                         if comment_author == "theonefoster":
@@ -252,6 +256,9 @@ def check_comments():
                             if parent.fullname.startswith("t1"):# TODO - this isn't necessary I think
                                 parent = get_comment_from_submission(parent)
                                 purge_thread(parent)
+                                if comment_author == "theonefoster":
+                                    my_comment = tof.get_info(thing_id = comment.fullname)
+                                    my_comment.delete()
                             else:
                                 if comment_author == "theonefoster":
                                     my_comment = tof.get_info(thing_id = comment.fullname)
@@ -265,6 +272,9 @@ def check_comments():
                             r.send_message(comment_author, "Failed command", "Your purge command failed for an unknown reason. Your comment was removed.")
                         finally:
                             comment.remove(False)
+                    elif comment.body == "ayy":
+                        print("Responding to ayy by /u/" + comment_author)
+                        comment.reply("lmao").distinguish()
 
             except AttributeError: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
                 print("Attribute Error! Comment was probably deleted.")
@@ -314,8 +324,6 @@ def check_submissions():
                             print("Removing submission " + submission.short_link + " (unlisted video)..")
                             removed = True
                         elif vid_id in recent_video_data["videos"]: #submission is repost
-                            if "t" in recent_video_data["videos"]:
-                                del recent_video_data["videos"]["t"] # remove filler data 
                             my_old_post = recent_video_data["videos"][vid_id]
                             try:
                                 old_post = r.get_info(thing_id="t3_" + my_old_post.sub_ID)
@@ -327,9 +335,10 @@ def check_submissions():
                                 remove_post = True # assume repost isn't allowed by default; will be removed
 
                             if remove_post: #flag to show if it should be removed
-                                submission.remove(False)
+                                #submission.remove(False)
                                 comment = REPOSTCOMMENT.format(old_link=old_post.permalink)
-                                submission.add_comment(comment).distinguish(sticky=True)
+                                #submission.add_comment(comment).distinguish(sticky=True)
+                                r.send_message(recipient="theonefoster", message=submission.permalink + "\n\n" + comment, subject="possible repost")
                                 removed = True
                                 print("Removing submission " + submission.short_link + " (reposted video)..")
 
@@ -341,7 +350,7 @@ def check_submissions():
                             my_sub.channel_ID = channel_id
                             my_sub.date_created = submission.created_utc
                             
-                            recent_videos_copy = recent_video_data["videos"].copy()
+                            recent_videos_copy = recent_video_data["videos"]
                             recent_videos_copy[vid_id] = my_sub # add submission info to temporary dict
                             recent_video_data["videos"] = recent_videos_copy # copy new dict to shelve (can't add to shelve dict directly)
 
@@ -393,14 +402,14 @@ def check_submissions():
                     recent_video_data.sync()
 
 def title_has_two_tags(title):
-    twoTagsRegex = re.compile('.*\[(intentional|unintentional|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|media|article|discussion|question|meta|request)\].*', re.I)
+    twoTagsRegex = re.compile('.*\[(intentional|unintentional|roleplay|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|media|article|discussion|question|meta|request)\].*', re.I)
     return (re.search(twoTagsRegex, title) != None) # search the title for two tags; if two are found return true, else return false
 
 def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
     submissions = subreddit.get_top_from_all(limit=1000)
     addedcount = 0
     totalcount = 0
-    goal = 600
+    goal = 700
 
     for submission in submissions:
         totalcount += 1
@@ -569,7 +578,7 @@ def add_warning(post): # post is a reddit 'thing' (comment or submission) for wh
 
 def is_bad_title(title):
     title = title.lower()
-    if ("[intentional]" in title or "[unintentional]" in title):
+    if ("[intentional]" in title or "[unintentional]" in title or "[roleplay]" in title or "[role play]" in title):
         for phrase in BADTITLEPHRASES:
             if phrase in title:
                 return True
@@ -627,9 +636,13 @@ def clear_user_submissions():
 
     submissions = user_submission_data["submissions"]
     users = list(submissions.keys())
-    for user in users: 
+
+    for user in users:
+        if user == "un" and len(users) > 2:
+            del submissions["un"]
+            continue
         submissions_by_user = submissions[user] 
-        temp = submissions_by_user.copy()
+        temp = list(submissions_by_user)
         for s in temp:
             if s.date_created < (time.time()-86400): #if the submission was over 24 hours ago
                 submissions_by_user.remove(s) # remove it from the list
@@ -643,9 +656,9 @@ def clear_user_submissions():
     user_submission_data.sync()
 
 def update_seen_objects():
-    done_submissions = recent_video_data["submissions"][:100] # trim to only 100 subs
+    done_submissions = seen_objects["submissions"][:500] # trim to only 500 subs
     seen_objects["submissions"] = done_submissions
-    done_comments = recent_video_data["comments"][:100] # trim to only 100 comments
+    done_comments = seen_objects["comments"][:500] # trim to only 500 comments
     seen_objects["comments"] = done_comments
     seen_objects.sync()
 
@@ -655,7 +668,7 @@ def clear_video_submissions(): # maybe doesn't work??
     dict_keys = list(submissions_dict.keys())
     
     for key in dict_keys:
-        if key == "t" and len(dict_keys) > 2:
+        if key == "id" and len(dict_keys) > 2:
             del submissions_dict[key]
         elif submissions_dict[key].date_created < (time.time() - 7948800): #if submission was more than 3 months ago
             del submissions_dict[key]
@@ -664,16 +677,15 @@ def clear_video_submissions(): # maybe doesn't work??
     recent_video_data.sync()
 
 def asmr_bot():
-
     schedule.run_pending()
-    check_comments()
     check_submissions()
+    check_comments()
     reply_to_messages()
     check_mod_queue()
 
-# ----------------------------------------------------
+# --------------------------------
 # END OF FUNCTIONS
-# ----------------------------------------------------
+# --------------------------------
 
 r = login()
 tof = theonefoster_bot.login()
@@ -684,7 +696,7 @@ schedule.every().thursday.at("23:50").do(remove_ffaf)
 schedule.every().wednesday.at("18:00").do(remove_tech_tuesday)
 schedule.every(28).days.at("03:00").do(update_top_submissions) #once per month ish
 schedule.every().hour.do(clear_user_submissions)
-schedule.every().hour.do(update_seen_objects)
+schedule.every().day.do(update_seen_objects)
 schedule.every().day.at("02:00").do(clear_video_submissions) #once per day
 
 while True:
