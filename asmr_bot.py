@@ -39,7 +39,7 @@ MODLIST = {'theonefoster', 'nvadergir', 'zimm3rmann', 'youngnreckless', 'mahi-ma
 VIEWEDMODQUEUE = set()
 modqueue_is_full = True #if bot is restarted it will wait for empty modqueue before full queue notifications begin
 unactioned_modqueue = queue.Queue(0)
-first_run = True
+first_run = True #does a lot more processing on first run to catch up with anything missed during downtime
 
 # Messages
 METAEXPLAIN = d.METAEXPLAIN
@@ -478,9 +478,14 @@ def check_messages():
                                     video_count = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "videoCount"))
 
                                 if video_count >= 12:
-                                    r.set_flair(subreddit="asmr", item=user, flair_text=channel_name, flair_css_class="purpleflair")
-                                    message.reply("Verification has been sucessful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
-                                    print("Verified and set flair for " + user)
+                                    try:
+                                        r.set_flair(subreddit="asmr", item=user, flair_text=channel_name, flair_css_class="purpleflair")
+                                        message.reply("Verification has been sucessful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
+                                        global subreddit
+                                        subreddit.add_contributor(user)
+                                        print("Verified and set flair for " + user)
+                                    except:
+                                        message.reply("An unknown error occurred during flair assignment. You passed the flair eligibility test but something went wrong - this could be due to reddit being overloaded. Please contact the mods directly. Sorry about that :\\")
                                 else:
                                     message.reply("Unfortunately your channel needs to have at least 12 published videos to be eligible for subreddit flair, but you've only published " + str(video_count) + " so far. Thanks for applying though, and feel free to check back once you've published 12 videos.")
                                     print("flair verification for " + channel_name + " failed - not enough published videos.")
@@ -811,4 +816,4 @@ while True:
         if first_run:
             first_run = False
 
-        time.sleep(7) # reduces reddit load and unnecessary processor usage
+        time.sleep(9) # reduces reddit load and unnecessary processor usage
