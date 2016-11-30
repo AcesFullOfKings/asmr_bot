@@ -139,6 +139,9 @@ def video_is_unlisted(ID):
 def check_mod_queue():
     global modqueue_is_full
     global unactioned_modqueue
+    global seen_objects
+    global user_submission_data
+    global recent_video_data
 
     modqueue = list(r.get_mod_queue(subreddit=subreddit.display_name))
 
@@ -147,7 +150,7 @@ def check_mod_queue():
             print("New modqueue item!")
             VIEWEDMODQUEUE.add(item.fullname)
 
-            hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour + 6)%24)
+            hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour + 4)%24)
             min = str(time.struct_time(time.strptime(time.ctime())).tm_min)
             scheduletime = hour+":"+min
             
@@ -155,17 +158,6 @@ def check_mod_queue():
 
             schedule.every().day.at(scheduletime).do(check_old_mod_queue_item)
 
-            #useless_report = False
-            #p = ""
-
-            #for report in item.user_reports:
-            #    if (report[0] is None or report[0] == "Spam" or "own content" in report[0] or "self promotion" in report[0] or "self-promotion" in report[0]): #report is None if no reason given
-            #        useless_report = True
-            #        p = report[0]
-            #if useless_report:
-            #    item.clicked = True
-            #    #item.ignore_reports()
-            #    print("Item approved - ignored \"own content\"/spam/blank report. (Reason: '" + p + "')")
             if user_is_shadowbanned(item.author.name):
                 print("Replying to shadowbanned user " + item.author.name)
              
@@ -188,17 +180,20 @@ def check_old_mod_queue_item():
     modqueue = list(r.get_mod_queue(subreddit=subreddit.display_name, fetch=True))
     for item in modqueue:
         if item.id == submission.id:
-            print("Modqueue item unactioned for 6 hours - messaging mods")
-            r.send_message("/r/" + subreddit.display_name, "Unactioned Modqueue Item", "Attention - a modqueue item hasn't been actioned for 6 hours. Please review it asap! \n\n https://www.reddit.com/r/asmr/about/modqueue/")
+            print("Modqueue item unactioned for 4 hours - messaging mods")
+            r.send_message("/r/" + subreddit.display_name, "Unactioned Modqueue Item", "Attention - a modqueue item hasn't been actioned for 4 hours. Please review it asap! \n\n https://www.reddit.com/r/asmr/about/modqueue/")
     return schedule.CancelJob
 
 def check_comments():
     global first_run
+    global seen_objects
+    global user_submission_data
+    global recent_video_data
 
     if first_run:
         limit = 100
     else:
-        limit = 10
+        limit = 6
 
     comments = list(subreddit.get_comments(limit=limit)) # sends request
 
@@ -212,6 +207,11 @@ def check_comments():
             try:
                 comment_author = comment.author.name.lower()
                 comment_body = comment.body.lower()
+
+                if any(comment_body == x for x in ["ayy", "ayyy", "ayyyy", "ayyyyy"]):
+                    print("Responding to ayy by /u/" + comment_author)
+                    comment.reply("lmao").distinguish()
+                    continue
 
                 if (comment_author in MODLIST):
                     if ('!bot-meta' in comment_body):
@@ -279,9 +279,6 @@ def check_comments():
                             r.send_message(comment_author, "Failed command", "Your purge command failed for an unknown reason. Your comment was removed.")
                         finally:
                             comment.remove(False)
-                    elif comment.body == "ayy":
-                        print("Responding to ayy by /u/" + comment_author)
-                        comment.reply("lmao").distinguish()
 
             except AttributeError: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
                 print("Attribute Error! Comment was probably deleted.")
@@ -289,6 +286,9 @@ def check_comments():
     
 def check_submissions():
     global first_run
+    global recent_video_data
+    global user_submission_data
+    global seen_objects
 
     if first_run:
         limit = 50
@@ -296,8 +296,7 @@ def check_submissions():
         limit = 8
 
     submissions = list(subreddit.get_new(limit=limit))
-    global recent_video_data
-    global user_submission_data
+
 
     for submission in submissions:
         if submission.id not in seen_objects["submissions"]: 
@@ -359,10 +358,9 @@ def check_submissions():
                                     remove_post = True # assume repost isn't allowed by default; will be removed
 
                                 if remove_post: #flag to show if it should be removed
-                                    #submission.remove(False)
+                                    submission.remove(False)
                                     comment = REPOSTCOMMENT.format(old_link=old_post.permalink)
-                                    #submission.add_comment(comment).distinguish(sticky=True)
-                                    r.send_message(recipient="theonefoster", message=submission.permalink + "\n\n" + comment, subject="possible repost")
+                                    submission.add_comment(comment).distinguish(sticky=True)
                                     removed = True
                                     print("Removing submission " + submission.short_link + " (reposted video)..")
 
@@ -373,7 +371,11 @@ def check_submissions():
                                 my_sub.sub_ID = submission.id
                                 my_sub.channel_ID = channel_id
                                 my_sub.date_created = submission.created_utc
-                            
+
+                                if is_roleplay(submission.title, vid_id):
+                                    r.send_message(recipient=submission.author.name, subject="Role Play " + submission.id, message="Hey! It looks like you've submitted a roleplay-type on /r/asmr. We're trialling tagging these submissions as [Roleplay] to help users find submisisons that they'll enjoy. If you think your submission is a roleplay, please reply to this message with \"yes\" without altering the subject to re-flair your submission automatically. This will help categorise your submission for users looking for particular video types.\n\n Thanks!")
+                                    print("Advising " + str(submission.author.name) + " of Roleplay flair via PM..")
+                                    
                                 recent_videos_copy = recent_video_data["videos"]
                                 recent_videos_copy[vid_id] = my_sub # add submission info to temporary dict
                                 recent_video_data["videos"] = recent_videos_copy # copy new dict to shelve (can't add to shelve dict directly)
@@ -416,57 +418,11 @@ def check_submissions():
                                         l = d[submission.author.name] # get list of user submissions
                                         l.append(my_sub) #append submission to list
                                         d[submission.author.name] = l # update dict value
-                                        user_submission_data["submissions"] = d #write dict back to shelve
-                            
+                                        user_submission_data["submissions"] = d #write dict back to shelve 
                 except Exception as e:
                     print("exception on removal of submission " + submission.short_link + " - " + str(e))
-                    #traceback.print_exc()
-                finally:
-                    user_submission_data.sync()
-                    recent_video_data.sync()
 
-def title_has_two_tags(title):
-    twoTagsRegex = re.compile('.*\[(intentional|unintentional|roleplay|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|media|article|discussion|question|meta|request)\].*', re.I)
-    return (re.search(twoTagsRegex, title) is not None) # search the title for two tags; if two are found return true, else return false
-
-def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
-    submissions = subreddit.get_top_from_all(limit=1000)
-    addedcount = 0
-    totalcount = 0
-    goal = 700
-
-    for submission in submissions:
-        totalcount += 1
-        print("Got submission " + submission.id + "(" + str(totalcount) + ")")
-        if (".youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
-            try:
-                result = vidIDregex.split(submission.url)
-                vidID = result[5]
-                channelName = get_youtube_video_data("videos", "snippet", "id", vidID, "channelTitle")
-                vidTitle = get_youtube_video_data("videos", "snippet", "id", vidID, "title")
-                if (channelName != -1) and (vidTitle != -1):
-                    toplist[str(addedcount)] = {"URL" : submission.url, "Channel": channelName, "Title": vidTitle, "Reddit Link": submission.permalink}
-                    addedcount += 1
-                    if addedcount > goal:
-                        break
-                else:
-                    print("Youtube Exception. Bad link?")
-            except Exception as e:
-                print("Other exception - " + str(e))
-                #traceback.print_exc()
-
-    toplist.sync()
-    print("total videos: " + str(addedcount))
-
-def recommend_top_submission():
-    if "1" not in toplist: #if the database doesn't exist
-        update_top_submissions()
-    rand = random.randint(0, len(toplist)-1)
-    rtn = "How about [" + toplist[str(rand)]["Title"] + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
-
-    return ''.join(char for char in rtn if char in string.printable) # removes stupid unicode characters
-
-def reply_to_messages():
+def check_messages():
     messages = list(r.get_unread(limit=10))
 
     for message in messages:
@@ -474,10 +430,22 @@ def reply_to_messages():
             user = message.author.name
             print("Message dectected from " + user)
 
-            if ("!recommend" in message.body.lower()): # recommendation
+            if ("!recommend" in message.body.lower() or "!recommend" in message.subject.lower()): # recommendation
                 print("Recommending popular video")
                 message_to_send = recommend_top_submission()
                 message.reply(message_to_send)
+            elif "Role Play " in message.subject:
+                try:
+                    id = message.subject[-6:]
+                    submission = r.get_info(thing_id = "t3_" + id)
+                    if message.author.name == submission.author.name:
+                        print("Assigning roleplay flair..")
+                        submission.set_flair("ROLEPLAY", "roleplay")
+                        message.reply("Thanks! I've updated your submission's flair for you :)")
+                    else:
+                        message.reply("Command failed - you can't edit flair on other people's submissions.")
+                except: # if it fails, oh well
+                    message.reply("Command failed for unknown reason. Please [contact mods on modmail](https://www.reddit.com/message/compose?to=%2Fr%2Fasmr)")
             elif(message.subject == "flair request" or message.subject == "re: flair request"): # set flair
 
                 got_from_id = False
@@ -539,7 +507,65 @@ Please make sure that the username/ID is exactly correct as it appears on youtub
             elif("post reply" not in message.subject) and ("comment reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
                 print("Command not recognised. Message was " + message.body)
                 message.reply("Sorry, I don't recognise that command. If you're trying to request a flair, read [the instructions here](https://www.reddit.com/r/asmr/wiki/flair_requests). For other commands you can send me, read the [asmr_bot wiki page](https://www.reddit.com/r/asmr/wiki/asmr_bot). If you have any questions or feedback, please message /u/theonefoster.")
+        else:
+            message.reply("I'm a bot, so I can't read replies to my comments. If you have some feedback please message /u/theonefoster.")
         message.mark_as_read()
+
+def title_has_two_tags(title):
+    twoTagsRegex = re.compile('.*\[(intentional|unintentional|roleplay|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|media|article|discussion|question|meta|request)\].*', re.I)
+    return (re.search(twoTagsRegex, title) is not None) # search the title for two tags; if two are found return true, else return false
+
+def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
+    toplist = shelve.open("topPosts","c")
+    submissions = subreddit.get_top_from_all(limit=1000)
+    added_count = 0
+    total_count = 0
+    goal = 700
+
+    for submission in submissions:
+        total_count += 1
+        print("Got submission " + submission.id + "(" + str(total_count) + ")")
+        if (".youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
+            try:
+                result = vidIDregex.split(submission.url)
+                vid_id = result[5]
+                channel_name = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelTitle")
+                vid_title = get_youtube_video_data("videos", "snippet", "id", vid_id, "title")
+                if (channel_name != -1) and (vid_title != -1):
+                    toplist[str(added_count)] = {"URL" : submission.url, "Channel": channel_name, "Title": vid_title, "Reddit Link": submission.permalink}
+                    added_count += 1
+                    if added_count > goal:
+                        break
+                else:
+                    print("Youtube Exception. Bad link?")
+            except Exception as e:
+                print("Other exception - " + str(e))
+                #traceback.print_exc()
+    toplist.sync()
+    toplist.close()
+    print("total videos: " + str(added_count))
+
+def recommend_top_submission():
+    toplist = shelve.open("topPosts","c")
+
+    if "1" not in list(toplist): #if the database doesn't exist
+        toplist.sync()
+        toplist.close()
+        update_top_submissions()
+        toplist = shelve.open("topPosts","c")
+
+    rand = random.randint(0, len(toplist)-1)
+    title = ''.join(char for char in toplist[str(rand)]["Title"] if char in string.printable)
+
+    if title == "":
+        title = "this video"
+
+    rtn = "How about [" + title + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
+    
+    toplist.sync()
+    toplist.close()
+
+    return rtn
 
 def user_is_active(username):# TODO
     return True
@@ -568,7 +594,7 @@ def add_warning(post): # post is a reddit 'thing' (comment or submission) for wh
     # curWar.execute("DELETE FROM warnings WHERE name=?", [user])
     # sqlWar.commit()
     # print "deleted."
-    # time.sleep(10000)
+    # time.sleep(1000000)
 
     warnings_cursor.execute("SELECT * FROM warnings WHERE name=?", [user])
     result = warnings_cursor.fetchone()
@@ -611,7 +637,8 @@ def is_banned_link(url):
     if (    (".youtube." in url 
              or "youtu.be" in url
             )
-        and ("playlist" in url 
+        and ("playlist" in url
+             or "list=" in url 
              or "/channel/" in url 
              or "/user/" in url
             )
@@ -619,6 +646,19 @@ def is_banned_link(url):
         return True
     else:
         return False
+
+def is_roleplay(title, vid_id):
+    title = title.lower()
+    if "[intentional]" in title: #only care about submissions tagged [intentional]
+        if ("role play" in title or "roleplay" in title):
+            return True
+        else:
+            vid_title = get_youtube_video_data("videos", "snippet", "id", vid_id, "title")
+            if vid_title != -1:
+                vid_title = vid_title.lower()
+                if "roleplay" in vid_title or "role play" in vid_title:
+                    return True
+    return False
 
 def purge_thread(comment): # yay recursion woop woop
     for c in comment.replies:
@@ -689,7 +729,6 @@ def clear_user_submissions():
                 submissions[user] = submissions_by_user # update submissions log
 
     user_submission_data["submissions"] = submissions
-    user_submission_data.sync()
 
 def update_seen_objects():
     done_submissions = seen_objects["submissions"][:500] # trim to only 500 subs
@@ -710,20 +749,14 @@ def clear_video_submissions(): # maybe doesn't work??
             del submissions_dict[key]
 
     recent_video_data["videos"] = submissions_dict
-    recent_video_data.sync()
 
 def asmr_bot():
-
-    global first_run
-
     schedule.run_pending()
     check_submissions()
     check_comments()
-    reply_to_messages()
+    check_messages()
     check_mod_queue()
 
-    if first_run:
-        first_run = False
 # --------------------------------
 # END OF FUNCTIONS
 # --------------------------------
@@ -762,4 +795,20 @@ while True:
             time.sleep(30) # usually rate limits or 503. Sleeping reduces reddit load.
     finally:
         r.handler.clear_cache()
+
+        recent_video_data.sync()
+        user_submission_data.sync()
+        seen_objects.sync()
+
+        recent_video_data.close()
+        user_submission_data.close()
+        seen_objects.close()
+
+        user_submission_data = shelve.open("user_submission_data", "c") # all submissions from past day by author
+        recent_video_data = shelve.open("recent_video_data", "c") # videos submitted over past 3 months
+        seen_objects = shelve.open("seen_objects", "c") # to track which objects have been seen.
+
+        if first_run:
+            first_run = False
+
         time.sleep(7) # reduces reddit load and unnecessary processor usage
