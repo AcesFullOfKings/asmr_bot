@@ -517,7 +517,7 @@ Please make sure that the username/ID is exactly correct as it appears on youtub
         message.mark_as_read()
 
 def title_has_two_tags(title):
-    twoTagsRegex = re.compile('.*\[(intentional|unintentional|roleplay|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|media|article|discussion|question|meta|request)\].*', re.I)
+    twoTagsRegex = re.compile('.*\[(intentional|unintentional|roleplay|role play|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|role play|media|article|discussion|question|meta|request)\].*', re.I)
     return (re.search(twoTagsRegex, title) is not None) # search the title for two tags; if two are found return true, else return false
 
 def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
