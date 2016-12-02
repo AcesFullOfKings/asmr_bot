@@ -373,7 +373,7 @@ def check_submissions():
                                 my_sub.date_created = submission.created_utc
 
                                 if is_roleplay(submission.title, vid_id):
-                                    r.send_message(recipient=submission.author.name, subject="Role Play " + submission.id, message="Hey! It looks like you've submitted a roleplay-type on /r/asmr. We're trialling tagging these submissions as [Roleplay] to help users find submisisons that they'll enjoy. If you think your submission is a roleplay, please reply to this message with \"yes\" without altering the subject to re-flair your submission automatically. This will help categorise your submission for users looking for particular video types.\n\n Thanks!")
+                                    r.send_message(recipient=submission.author.name, subject="Role Play " + submission.id, message="Hey! It looks like you've submitted a roleplay-type video on /r/asmr. We're trialling tagging these sorts of submissions as [Roleplay] to help users find submisisons that they'll enjoy. If you think your submission is a roleplay, please reply to this message with \"yes\" without altering the subject to re-flair your submission automatically. This will help categorise your submission for users looking for particular video types.\n\n Thanks!")
                                     print("Advising " + str(submission.author.name) + " of Roleplay flair via PM..")
                                     
                                 recent_videos_copy = recent_video_data["videos"]
@@ -654,8 +654,9 @@ def is_banned_link(url):
 
 def is_roleplay(title, vid_id):
     title = title.lower()
+    rp_types = ["role play", "roleplay", "role-play", " RP ", "RP."]
     if "[intentional]" in title: #only care about submissions tagged [intentional]
-        if ("role play" in title or "roleplay" in title):
+        if any(rp in title for rp in rp_types):
             return True
         else:
             vid_title = get_youtube_video_data("videos", "snippet", "id", vid_id, "title")
@@ -663,6 +664,10 @@ def is_roleplay(title, vid_id):
                 vid_title = vid_title.lower()
                 if "roleplay" in vid_title or "role play" in vid_title:
                     return True
+                else:
+                    tags = get_youtube_video_data("videos", "snippet", "id", vid_id, "tags")
+                    if tags != -1:
+                        return any(rp in tags for rp in rp_types) #true if roleplay in tags; false otherwise
     return False
 
 def purge_thread(comment): # yay recursion woop woop
