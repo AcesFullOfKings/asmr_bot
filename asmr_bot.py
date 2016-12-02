@@ -653,22 +653,25 @@ def is_banned_link(url):
         return False
 
 def is_roleplay(title, vid_id):
-    title = title.lower()
-    rp_types = ["role play", "roleplay", "role-play", " RP ", "RP."]
-    if "[intentional]" in title: #only care about submissions tagged [intentional]
-        if any(rp in title for rp in rp_types):
-            return True
-        else:
-            vid_title = get_youtube_video_data("videos", "snippet", "id", vid_id, "title")
-            if vid_title != -1:
-                vid_title = vid_title.lower()
-                if "roleplay" in vid_title or "role play" in vid_title:
-                    return True
-                else:
-                    tags = get_youtube_video_data("videos", "snippet", "id", vid_id, "tags")
-                    if tags != -1:
-                        return any(rp in tags for rp in rp_types) #true if roleplay in tags; false otherwise
-    return False
+    try:
+        title = title.lower()
+        rp_types = ["role play", "roleplay", "role-play", " RP ", "RP."]
+        if "[intentional]" in title: #only care about submissions tagged [intentional]
+            if any(rp in title for rp in rp_types):
+                return True
+            else:
+                vid_title = get_youtube_video_data("videos", "snippet", "id", vid_id, "title")
+                if vid_title != -1:
+                    vid_title = vid_title.lower()
+                    if "roleplay" in vid_title or "role play" in vid_title:
+                        return True
+                    else:
+                        tags = get_youtube_video_data("videos", "snippet", "id", vid_id, "tags")
+                        if tags != -1:
+                            return any(rp in tags for rp in rp_types) #true if roleplay in tags; false otherwise
+        return False
+    except:
+        return False
 
 def purge_thread(comment): # yay recursion woop woop
     for c in comment.replies:
