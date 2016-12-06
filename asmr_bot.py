@@ -23,38 +23,37 @@ class my_submission_type():
     date_created = ""
 
 # PRAW details, other imported data
-app_user_agent = d.appUserAgent
-app_id = d.appID
-app_secret = d.appSecret
-app_URI = d.appURI
-app_refresh_token = d.appRefreshToken
-BADTITLEPHRASES = d.BadTitlePhrases
-BANNEDCHANNELS = d.BANNEDCHANNELS
+app_user_agent = d.app_user_agent
+app_id = d.app_id
+app_secret = d.app_secret
+app_URI = d.app_URI
+app_refresh_token = d.app_refresh_token
+bad_title_phrases = d.bad_title_phrases
+banned_channels = d.BANNED_CHANNELS
 
 # gdata details
-gBrowserKey  = d.gBrowserKey
+g_browser_key  = d.g_browser_key
 
 # global variables
-MODLIST = {'theonefoster', 'nvadergir', 'zimm3rmann', 'youngnreckless', 'mahi-mahi', 'asmr_bot', 'sidecarfour', 'harrietpotter'}
-VIEWEDMODQUEUE = set()
+mod_list = {'theonefoster', 'nvadergir', 'zimm3rmann', 'youngnreckless', 'mahi-mahi', 'asmr_bot', 'sidecarfour', 'harrietpotter'}
+viewed_mod_queue = set()
 modqueue_is_full = True #if bot is restarted it will wait for empty modqueue before full queue notifications begin
 unactioned_modqueue = queue.Queue(0)
 first_run = True #does a lot more processing on first run to catch up with anything missed during downtime
 
 # Messages
-METAEXPLAIN = d.METAEXPLAIN
-SBEXPLAIN = d.SBEXPLAIN
-SBEXPLAIN_MSG = d.SBEXPLAIN_MSG
-MUSEXPLAIN = d.MUSEXPLAIN
-TITLE_EXPLAIN = d.TITLE_EXPLAIN
-BANNEDCHANNELCOMMENT = d.BANNEDCHANNELCOMMENT
-TWOTAGSCOMMENT = d.TWOTAGSCOMMENT
-BANNEDCHANNELCOMMENT = d.BANNEDCHANNELCOMMENT
-BADTITLECOMMENT = d.BADTITLECOMMENT
-UNLISTEDCOMMENT = d.UNLISTEDCOMMENT
-SPAMCOMMENT = d.SPAMCOMMENT
-REPOSTCOMMENT = d.REPOSTCOMMENT
-CHANNEL_PLAYLIST_EXPLAIN = d.CHANNEL_PLAYLIST_EXPLAIN
+meta_explain = d.META_EXPLAIN
+sb_explain = d.SB_EXPLAIN
+sb_explain_msg = d.SB_EXPLAIN_MSG
+mus_explain = d.MUS_EXPLAIN
+mod_title_explain = d.MOD_TITLE_EXPLAIN
+two_tags_explain = d.TWO_TAGS_COMMENT
+banned_channel_explain = d.BANNED_CHANNEL_COMMENT
+auto_title_explain = d.AUTO_TITLE_COMMENT
+unlisted_explain = d.UNLISTED_COMMENT
+spam_explain = d.SPAM_COMMENT
+repost_explain = d.REPOST_COMMENT
+channel_or_playlist_explain = d.CHANNEL_PLAYLIST_EXPLAIN
 del(d)
 
 vidIDregex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
@@ -100,7 +99,7 @@ def get_youtube_video_data(location, part, input_type, input_val, return_val):
     input_val = input_val.replace(" ", "") # remove spaces (http doesn't like spaces, and it works fine without them: usernames don't have spaces but people think they do: "CGP Grey" is really "cgpgrey")
 
     try:
-        URL = ("https://www.googleapis.com/youtube/v3/" + location + "?part=" + part + "&" + input_type + "=" + input_val + "&key=" + gBrowserKey)
+        URL = ("https://www.googleapis.com/youtube/v3/" + location + "?part=" + part + "&" + input_type + "=" + input_val + "&key=" + g_browser_key)
         response = requests.get(URL).json()
         items = response[u'items']
         snippet = items[0][part]
@@ -146,9 +145,9 @@ def check_mod_queue():
     modqueue = list(r.get_mod_queue(subreddit=subreddit.display_name))
 
     for item in modqueue:
-        if item.fullname not in VIEWEDMODQUEUE:
+        if item.fullname not in viewed_mod_queue:
             print("New modqueue item!")
-            VIEWEDMODQUEUE.add(item.fullname)
+            viewed_mod_queue.add(item.fullname)
 
             hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour + 4)%24)
             min = str(time.struct_time(time.strptime(time.ctime())).tm_min)
@@ -163,10 +162,10 @@ def check_mod_queue():
              
                 if item.fullname.startswith("t3"):  # submission
                     item.remove(False)
-                    item.add_comment(SBEXPLAIN).distinguish(sticky=True)
+                    item.add_comment(sb_explain).distinguish(sticky=True)
                 elif item.fullname.startswith("t1"): # comment
                     item.remove(False)
-                    r.send_message(recipient=item.author, subject="Shadowban notification", message=SBEXPLAIN_MSG)
+                    r.send_message(recipient=item.author, subject="Shadowban notification", message=sb_explain_msg)
                 item.clicked = True
             elif len(modqueue) >= 4 and modqueue_is_full == False:
                 print("Full modqueue detected! Messaging mods..")
@@ -213,7 +212,7 @@ def check_comments():
                     comment.reply("lmao").distinguish()
                     continue
 
-                if (comment_author in MODLIST):
+                if (comment_author in mod_list):
                     if ('!bot-meta' in comment_body):
                         print("Comment found! Replying to " + comment_author + " (bad meta post)")
                         if comment_author == "theonefoster":
@@ -224,7 +223,7 @@ def check_comments():
                         submissionID = comment.parent_id
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
-                        submission.add_comment(METAEXPLAIN).distinguish(sticky=True)
+                        submission.add_comment(meta_explain).distinguish(sticky=True)
                     elif ('!bot-mus' in comment_body):
                         print("Comment found! Replying to " + comment_author + " (music)")
                         if comment_author == "theonefoster":
@@ -235,7 +234,7 @@ def check_comments():
                         submissionID = comment.parent_id
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
-                        TLcomment = submission.add_comment(MUSEXPLAIN).distinguish(sticky=True)
+                        TLcomment = submission.add_comment(mus_explain).distinguish(sticky=True)
                     elif ('!bot-title' in comment_body):
                         print("Comment found! Replying to " + comment_author + " (bad title)")
                         if comment_author == "theonefoster":
@@ -246,7 +245,7 @@ def check_comments():
                         submissionID = comment.parent_id
                         submission = r.get_submission(submission_id=submissionID[3:])
                         submission.remove(False)
-                        TLcomment = submission.add_comment(TITLE_EXPLAIN).distinguish(sticky=True)
+                        TLcomment = submission.add_comment(mod_title_explain).distinguish(sticky=True)
                     elif ("!bot-warning" in comment_body):
                         print("Comment found! Replying to " + comment_author + " (add warning)")
                         if comment_author == "theonefoster":
@@ -309,18 +308,18 @@ def check_submissions():
             
             if(title_has_two_tags(submission.title)):
                 submission.remove(False)
-                submission.add_comment(TWOTAGSCOMMENT).distinguish(sticky=True)
+                submission.add_comment(two_tags_explain).distinguish(sticky=True)
                 print("Removed submission " + submission.id + " for having two flair tags.")
             elif is_bad_title(submission.title):
                 submission.remove(False)
-                submission.add_comment(BADTITLECOMMENT).distinguish(sticky=True)
+                submission.add_comment(auto_title_explain).distinguish(sticky=True)
                 r.send_message("theonefoster", "Bad Title - Submission removed", submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
                 print("Removed submission " + submission.id + " for having a bad title.")
             elif ("youtube" in submission.url or "youtu.be" in submission.url):
                 try:
                     if is_banned_link(submission.url):
                         submission.remove(False)
-                        submission.add_comment(CHANNEL_PLAYLIST_EXPLAIN).distinguish(sticky=True)
+                        submission.add_comment(channel_or_playlist_explain).distinguish(sticky=True)
                         print("Removing submission " + submission.short_link + " (link to channel/playlist)")
                     else:
                         if ("youtube." in submission.url or "youtu.be" in submission.url):
@@ -336,14 +335,14 @@ def check_submissions():
                             channel_id = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelId")                  
                             removed = False
 
-                            if channel_id in BANNEDCHANNELS:
+                            if channel_id in banned_channels:
                                 submission.remove(False) # checks for banned youtube channels
-                                submission.add_comment(BANNEDCHANNELCOMMENT).distinguish(sticky=True)
+                                submission.add_comment(banned_channel_explain).distinguish(sticky=True)
                                 print("Removing submission " + submission.short_link + " (banned youtube channel)..")
                                 removed = True
                             elif video_is_unlisted(vid_id):
                                 submission.remove(False)
-                                submission.add_comment(UNLISTEDCOMMENT).distinguish(sticky=True)
+                                submission.add_comment(unlisted_explain).distinguish(sticky=True)
                                 print("Removing submission " + submission.short_link + " (unlisted video)..")
                                 removed = True
                             elif vid_id in recent_video_data["videos"]: #submission is repost
@@ -359,7 +358,7 @@ def check_submissions():
 
                                 if remove_post: #flag to show if it should be removed
                                     submission.remove(False)
-                                    comment = REPOSTCOMMENT.format(old_link=old_post.permalink)
+                                    comment = repost_explain.format(old_link=old_post.permalink)
                                     submission.add_comment(comment).distinguish(sticky=True)
                                     removed = True
                                     print("Removing submission " + submission.short_link + " (reposted video)..")
@@ -399,7 +398,7 @@ def check_submissions():
 
                                     if count >= 3: #3 or more submissions to same channel in past day
                                         submission.remove(False)
-                                        submission.add_comment(SPAMCOMMENT).distinguish(sticky=True)
+                                        submission.add_comment(spam_explain).distinguish(sticky=True)
                                         print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
                                     
                                         submissionlinks = submission.permalink + "\n\n"
@@ -633,7 +632,7 @@ def add_warning(post): # post is a reddit 'thing' (comment or submission) for wh
 def is_bad_title(title):
     title = title.lower()
     if any(phrase in title for phrase in ["[intentional]", "[unintentional]", "[roleplay]", "[role play]"]):
-        for phrase in BADTITLEPHRASES:
+        for phrase in bad_title_phrases:
             if phrase in title:
                 return True
     return False
@@ -744,9 +743,9 @@ def clear_user_submissions():
     user_submission_data["submissions"] = submissions
 
 def update_seen_objects():
-    done_submissions = seen_objects["submissions"][:500] # trim to only 500 subs
+    done_submissions = seen_objects["submissions"][-100:] # trim to only 500 subs
     seen_objects["submissions"] = done_submissions
-    done_comments = seen_objects["comments"][:500] # trim to only 500 comments
+    done_comments = seen_objects["comments"][-100:] # trim to only 500 comments
     seen_objects["comments"] = done_comments
     seen_objects.sync()
 
