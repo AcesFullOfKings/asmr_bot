@@ -743,13 +743,13 @@ def clear_user_submissions():
     user_submission_data["submissions"] = submissions
 
 def update_seen_objects():
-    done_submissions = seen_objects["submissions"][-100:] # trim to only 500 subs
+    done_submissions = seen_objects["submissions"][-100:] # trim to only 100 subs
     seen_objects["submissions"] = done_submissions
-    done_comments = seen_objects["comments"][-100:] # trim to only 500 comments
+    done_comments = seen_objects["comments"][-100:] # trim to only 100 comments
     seen_objects["comments"] = done_comments
     seen_objects.sync()
 
-def clear_video_submissions(): # maybe doesn't work??
+def clear_video_submissions():
     submissions_dict = recent_video_data["videos"]
 
     dict_keys = list(submissions_dict.keys())
