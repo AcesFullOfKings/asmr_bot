@@ -199,7 +199,7 @@ def check_comments():
     for comment in comments:
         if comment.id not in seen_objects["comments"]:
             seen_comments = seen_objects["comments"]
-            seen_objects["comments"].append(comment.id)
+            seen_comments.append(comment.id)
             seen_objects["comments"] = seen_comments
             seen_objects.sync()
 
@@ -437,7 +437,7 @@ def check_messages():
                 try:
                     id = message.subject[-6:]
                     submission = r.get_info(thing_id = "t3_" + id)
-                    if message.author.name == submission.author.name:
+                    if message.author.name == submission.author.name and submission.link_flair_text != "ROLEPLAY":
                         print("Assigning roleplay flair..")
                         submission.set_flair("ROLEPLAY", "roleplay")
                         message.reply("Thanks! I've updated your submission's flair for you :)")
@@ -478,13 +478,18 @@ def check_messages():
 
                                 if video_count >= 12:
                                     try:
-                                        r.set_flair(subreddit="asmr", item=user, flair_text=channel_name, flair_css_class="purpleflair")
-                                        message.reply("Verification has been sucessful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
                                         global subreddit
+                                        subreddit.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
+                                        message.reply("Verification has been sucessful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
                                         subreddit.add_contributor(user)
                                         print("Verified and set flair for " + user)
+
+                                        global lounge
+                                        lounge.add_contributor(user)
+                                        lounge.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
+
                                     except:
-                                        message.reply("An unknown error occurred during flair assignment. You passed the flair eligibility test but something went wrong - this could be due to reddit being overloaded. Please contact the mods directly. Sorry about that :\\")
+                                        message.reply("An unknown error occurred during flair assignment. You passed the flair eligibility test but something went wrong - this could be due to reddit being overloaded. Please try again, or if you've seen this message more than once then contact the mods directly. Sorry about that :\\")
                                 else:
                                     message.reply("Unfortunately your channel needs to have at least 12 published videos to be eligible for subreddit flair, but you've only published " + str(video_count) + " so far. Thanks for applying though, and feel free to check back once you've published 12 videos.")
                                     print("flair verification for " + channel_name + " failed - not enough published videos.")
@@ -777,6 +782,7 @@ r = login()
 tof = theonefoster_bot.login()
 del(theonefoster_bot)
 subreddit = r.get_subreddit("asmr")
+lounge = r.get_subreddit("asmrcreatorlounge")
 
 schedule.every().thursday.at("23:50").do(remove_ffaf)
 schedule.every().wednesday.at("18:00").do(remove_tech_tuesday)
