@@ -91,6 +91,10 @@ warnings_cursor = warnings_db.cursor()
 warnings_cursor.execute("CREATE TABLE IF NOT EXISTS warnings(NAME TEXT, WARNINGS INTEGER)")
 warnings_db.commit()
 
+# ----------------------
+# BEGIN FUNCTIONS
+# ----------------------
+
 def get_youtube_video_data(location, part, input_type, input_val, return_val):
 
     # read like "from LOCATION, get the PART where INPUT_TYPE is INPUT_VAL and return RETURN_VAL"
@@ -114,10 +118,6 @@ def days_since_youtube_channel_creation(**kwargs):
         creation_date = get_youtube_video_data("channels", "snippet", "id", kwargs["id"], "publishedAt")
     elif "name" in kwargs:
         creation_date = get_youtube_video_data("channels", "snippet", "forUsername", kwargs["name"], "publishedAt")
-    else:
-        print("Invalid kwargs passed for function days_since_youtube_channel_created!")
-        r.send_message(recipient="theonefoster", subject="Error in bot function", message="Invalid kwargs passed in days_since_youtube_channel_creation. Please check it immediately! \n\n kwargs were " + str(kwargs))
-        return -1
 
     if (creation_date != -1):
         try:
@@ -480,14 +480,14 @@ def check_messages():
                                     try:
                                         global subreddit
                                         subreddit.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
-                                        message.reply("Verification has been sucessful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
                                         subreddit.add_contributor(user)
-                                        print("Verified and set flair for " + user)
+                                        message.reply("Verification has been successful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
 
                                         global lounge
                                         lounge.add_contributor(user)
                                         lounge.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
 
+                                        print("Verified and set flair for " + user)
                                     except:
                                         message.reply("An unknown error occurred during flair assignment. You passed the flair eligibility test but something went wrong - this could be due to reddit being overloaded. Please try again, or if you've seen this message more than once then contact the mods directly. Sorry about that :\\")
                                 else:
@@ -511,9 +511,9 @@ Please make sure that the username/ID is exactly correct as it appears on youtub
             elif(message.subject == "delete flair"): # delete flair
                 if message.body == "delete flair":
                     r.delete_flair(subreddit="asmr", user=user)
-                    message.reply("Your flair has been deleted. To apply for flair again, use [this link.](https://www.reddit.com/message/compose?to=asmr_bot&subject=flair%20request&message=enter your channel name here)")
+                    message.reply("Your flair has been deleted. You may still submit to and view the /r/asmrCreatorLounge subreddit if you choose. To apply for flair again, use [this link.](https://www.reddit.com/message/compose?to=asmr_bot&subject=flair%20request&message=enter your channel name here)")
                     print("Flair deleted for " + user)
-            elif("post reply" not in message.subject) and ("comment reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
+            elif("post reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
                 print("Command not recognised. Message was " + message.body)
                 message.reply("Sorry, I don't recognise that command. If you're trying to request a flair, read [the instructions here](https://www.reddit.com/r/asmr/wiki/flair_requests). For other commands you can send me, read the [asmr_bot wiki page](https://www.reddit.com/r/asmr/wiki/asmr_bot). If you have any questions or feedback, please message /u/theonefoster.")
         else:
@@ -774,9 +774,9 @@ def asmr_bot():
     check_messages()
     check_mod_queue()
 
-# --------------------------------
+# ----------------------------
 # END OF FUNCTIONS
-# --------------------------------
+# ----------------------------
 
 r = login()
 tof = theonefoster_bot.login()
