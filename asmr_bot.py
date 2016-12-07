@@ -118,6 +118,8 @@ def days_since_youtube_channel_creation(**kwargs):
         creation_date = get_youtube_video_data("channels", "snippet", "id", kwargs["id"], "publishedAt")
     elif "name" in kwargs:
         creation_date = get_youtube_video_data("channels", "snippet", "forUsername", kwargs["name"], "publishedAt")
+    else:
+        creation_date = -1
 
     if (creation_date != -1):
         try:
