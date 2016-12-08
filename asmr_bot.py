@@ -14,7 +14,7 @@ import queue
 import schedule
 
 import asmr_bot_data as d # d for data
-import theonefoster_bot
+import theonefoster_bot # used to delete subreddit reply commands
 
 class my_submission_type():
     sub_permalink = ""
@@ -191,10 +191,7 @@ def check_comments():
     global user_submission_data
     global recent_video_data
 
-    if first_run:
-        limit = 100
-    else:
-        limit = 6
+    limit = 100 if first_run else 6
 
     comments = list(subreddit.get_comments(limit=limit)) # sends request
 
@@ -291,10 +288,7 @@ def check_submissions():
     global user_submission_data
     global seen_objects
 
-    if first_run:
-        limit = 50
-    else:
-        limit = 8
+    limit = 50 if first_run else 8
 
     submissions = list(subreddit.get_new(limit=limit))
 
@@ -366,7 +360,6 @@ def check_submissions():
                                     print("Removing submission " + submission.short_link + " (reposted video)..")
 
                             if not removed: #successful submission (youtube links only)
-                            
                                 my_sub = my_submission_type()
                                 my_sub.sub_permalink = submission.permalink
                                 my_sub.sub_ID = submission.id
@@ -653,7 +646,7 @@ def is_banned_link(url):
              or "/channel/" in url 
              or "/user/" in url
             )
-       ):
+       ): # sad
         return True
     else:
         return False
@@ -661,7 +654,7 @@ def is_banned_link(url):
 def is_roleplay(title, vid_id):
     try:
         title = title.lower()
-        rp_types = ["role play", "roleplay", "role-play", " RP ", "RP."]
+        rp_types = ["role play", "roleplay", "role-play", " rp ", "rp."]
         if "[intentional]" in title: #only care about submissions tagged [intentional]
             if any(rp in title for rp in rp_types):
                 return True
@@ -679,7 +672,7 @@ def is_roleplay(title, vid_id):
     except:
         return False
 
-def purge_thread(comment): # yay recursion woop woop
+def purge_thread(comment): # recursion is cool
     for c in comment.replies:
         purge_thread(c)
     comment.remove(False)
@@ -689,16 +682,8 @@ def get_comment_from_submission(comment):
     i = comment.id
     for c in s.comments:
         if c.id == i:
-            return c # yes, this is completely dumb. No, there's no other way to do it. Yes, the reddit api is weird sometimes.
-    return None      # just don't worry about it too much.
-
-def login():
-    print("logging in..")
-    r = praw.Reddit(app_user_agent, disable_update_check=True)
-    r.set_oauth_app_info(app_id,app_secret, app_URI)
-    r.refresh_access_information(app_refresh_token)
-    print("logged in as " + str(r.user.name))
-    return r
+            return c # Yes, this is completely dumb. No, there's no other way to do it.
+    return None      # Yes, the reddit api is weird sometimes. Just don't worry about it too much.
 
 def remove_tech_tuesday():
     sticky = subreddit.get_sticky()
@@ -769,6 +754,14 @@ def clear_video_submissions():
 
     recent_video_data["videos"] = submissions_dict
 
+def login():
+    print("logging in..")
+    r = praw.Reddit(app_user_agent, disable_update_check=True)
+    r.set_oauth_app_info(app_id,app_secret, app_URI)
+    r.refresh_access_information(app_refresh_token)
+    print("logged in as " + str(r.user.name))
+    return r
+
 def asmr_bot():
     schedule.run_pending()
     check_submissions()
@@ -788,7 +781,7 @@ lounge = r.get_subreddit("asmrcreatorlounge")
 
 schedule.every().thursday.at("23:50").do(remove_ffaf)
 schedule.every().wednesday.at("18:00").do(remove_tech_tuesday)
-schedule.every(28).days.at("03:00").do(update_top_submissions) #once per month ish
+schedule.every(14).days.at("03:00").do(update_top_submissions) #once per fortnight ish
 schedule.every().hour.do(clear_user_submissions)
 schedule.every().day.do(update_seen_objects)
 schedule.every().day.at("02:00").do(clear_video_submissions) #once per day
@@ -826,9 +819,8 @@ while True:
 
         user_submission_data = shelve.open("user_submission_data", "c") # all submissions from past day by author
         recent_video_data = shelve.open("recent_video_data", "c") # videos submitted over past 3 months
-        seen_objects = shelve.open("seen_objects", "c") # to track which objects have been seen.
+        seen_objects = shelve.open("seen_objects", "c") # track which objects have been seen
 
-        if first_run:
-            first_run = False
+        first_run = False
 
         time.sleep(9) # reduces reddit load and unnecessary processor usage
