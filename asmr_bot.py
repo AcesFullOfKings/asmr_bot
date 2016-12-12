@@ -32,7 +32,7 @@ bad_title_phrases = d.bad_title_phrases
 banned_channels = d.BANNED_CHANNELS
 
 # gdata details
-g_browser_key  = d.g_browser_key
+g_browser_key = d.g_browser_key
 
 # global variables
 mod_list = {'theonefoster', 'nvadergir', 'zimm3rmann', 'youngnreckless', 'mahi-mahi', 'asmr_bot', 'sidecarfour', 'harrietpotter'}
@@ -182,7 +182,7 @@ def check_old_mod_queue_item():
     for item in modqueue:
         if item.id == submission.id:
             print("Modqueue item unactioned for 4 hours - messaging mods")
-            r.send_message("/r/" + subreddit.display_name, "Unactioned Modqueue Item", "Attention - a modqueue item hasn't been actioned for 4 hours. Please review it asap! \n\n https://www.reddit.com/r/asmr/about/modqueue/")
+            r.send_message("/r/" + subreddit.display_name, "Unactioned Modqueue Item", "Attention - a modqueue item hasn't been actioned for 4 hours. Please review it asap!\n\nhttps://www.reddit.com/r/asmr/about/modqueue/")
     return schedule.CancelJob
 
 def check_comments():
@@ -219,8 +219,8 @@ def check_comments():
                             my_comment.delete()
                         else:
                             comment.remove(False)
-                        submissionID = comment.parent_id
-                        submission = r.get_submission(submission_id=submissionID[3:])
+                        submission_id = comment.parent_id
+                        submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
                         submission.add_comment(meta_explain).distinguish(sticky=True)
                     elif ('!bot-mus' in comment_body):
@@ -230,10 +230,10 @@ def check_comments():
                             my_comment.delete()
                         else:
                             comment.remove(False)
-                        submissionID = comment.parent_id
-                        submission = r.get_submission(submission_id=submissionID[3:])
+                        submission_id = comment.parent_id
+                        submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
-                        TLcomment = submission.add_comment(mus_explain).distinguish(sticky=True)
+                        submission.add_comment(mus_explain).distinguish(sticky=True)
                     elif ('!bot-title' in comment_body):
                         print("Comment found! Replying to " + comment_author + " (bad title)")
                         if comment_author == "theonefoster":
@@ -241,10 +241,10 @@ def check_comments():
                             my_comment.delete()
                         else:
                             comment.remove(False)
-                        submissionID = comment.parent_id
-                        submission = r.get_submission(submission_id=submissionID[3:])
+                        submission_id = comment.parent_id
+                        submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
-                        TLcomment = submission.add_comment(mod_title_explain).distinguish(sticky=True)
+                        submission.add_comment(mod_title_explain).distinguish(sticky=True)
                     elif ("!bot-warning" in comment_body):
                         print("Comment found! Replying to " + comment_author + " (add warning)")
                         if comment_author == "theonefoster":
@@ -367,7 +367,7 @@ def check_submissions():
                                 my_sub.date_created = submission.created_utc
 
                                 if is_roleplay(submission.title, vid_id):
-                                    r.send_message(recipient=submission.author.name, subject="Role Play " + submission.id, message="Hey! It looks like you've submitted a roleplay-type video on /r/asmr. We're trialling tagging these sorts of submissions as [Roleplay] to help users find submisisons that they'll enjoy. If you think your submission is a roleplay, please reply to this message with \"yes\" without altering the subject to re-flair your submission automatically. This will help categorise your submission for users looking for particular video types.\n\n Thanks!")
+                                    r.send_message(recipient=submission.author.name, subject="Role Play " + submission.id, message="Hey! It looks like you've submitted a roleplay-type video on /r/asmr. We're trialling tagging these sorts of submissions as **[roleplay]** to help users find submisisons that they'll enjoy. If you think your submission is a roleplay, please reply to this message with \"yes\" without altering the subject to re-flair your submission automatically. This will help categorise your submission for users looking for particular video types.\n\n Thanks!")
                                     print("Advising " + str(submission.author.name) + " of Roleplay flair via PM..")
                                     
                                 recent_videos_copy = recent_video_data["videos"]
@@ -377,9 +377,9 @@ def check_submissions():
                                 # now check if user has submitted three videos of same channel
 
                                 if submission.author.name not in user_submission_data["submissions"]:
-                                    d = user_submission_data["submissions"]
-                                    d[submission.author.name] = [my_sub]
-                                    user_submission_data["submissions"] = d
+                                    subs = user_submission_data["submissions"]
+                                    subs[submission.author.name] = [my_sub]
+                                    user_submission_data["submissions"] = subs
                                 else:
                                     user_submission_list = user_submission_data["submissions"][submission.author.name]
                                     count = 1 # there's already one in submission, don't forget to count that!
@@ -402,17 +402,19 @@ def check_submissions():
                                             submissionlinks += s.sub_permalink + "\n\n"
                                             sub_to_remove = r.get_info(thing_id="t3_" + s.sub_ID)
                                             sub_to_remove.remove(False)
+
                                         user_submission_data["submissions"][submission.author.name] = [] #clear the list (user is banned anyway)
+
                                         note = "too many links to same youtube channel - 1-day ban"
                                         msg = "Warning ban for spamming links to a youtube channel"
                                         subreddit.add_ban(submission.author, duration=1, note=note, ban_message=msg)
                                         r.send_message("/r/" + subreddit.display_name, "Ban Notification", "I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **1 day only**. \n\nLinks to the offending submissions:\n\n" + submissionlinks)
                                     else:
-                                        d = user_submission_data["submissions"]  #copy dict
-                                        l = d[submission.author.name] # get list of user submissions
+                                        subs = user_submission_data["submissions"]  #copy dict
+                                        l = subs[submission.author.name] # get list of user submissions
                                         l.append(my_sub) #append submission to list
-                                        d[submission.author.name] = l # update dict value
-                                        user_submission_data["submissions"] = d #write dict back to shelve 
+                                        subs[submission.author.name] = l # update dict value
+                                        user_submission_data["submissions"] = subs #write dict back to shelve 
                 except Exception as e:
                     print("exception on removal of submission " + submission.short_link + " - " + str(e))
 
@@ -442,41 +444,41 @@ def check_messages():
                     message.reply("Command failed for unknown reason. Please [contact mods on modmail](https://www.reddit.com/message/compose?to=%2Fr%2Fasmr)")
             elif(message.subject == "flair request" or message.subject == "re: flair request"): # set flair
 
-                got_from_id = False
+                using_id = False
                 channel_name = message.body
                 des = get_youtube_video_data("channels", "snippet", "forUsername", channel_name, "description") # des as in description #tested
             
                 if des == -1:
                     des = get_youtube_video_data("channels", "snippet", "id", message.body, "description")
                     channel_name = get_youtube_video_data("channels", "snippet", "id", message.body, "title")
-                    got_from_id = True
+                    using_id = True
 
                 if des != -1:
                     if "hey /r/asmr mods!" in des.lower():
-                        if got_from_id:
+                        if using_id:
                             subs = int(get_youtube_video_data("channels", "statistics", "id", message.body, "subscriberCount"))
                         else:
                             subs = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "subscriberCount"))
 
                         if subs >= 1000:
-                            if got_from_id:
+                            if using_id:
                                 age = days_since_youtube_channel_creation(id=message.body)
                             else:
                                 age = days_since_youtube_channel_creation(name=channel_name)
 
                             if age > 182:
 
-                                if got_from_id:
+                                if using_id:
                                     video_count = int(get_youtube_video_data("channels", "statistics", "id", message.body, "videoCount"))
                                 else:
                                     video_count = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "videoCount"))
 
-                                if video_count >= 12:
+                                if video_count >= 15:
                                     try:
                                         global subreddit
                                         subreddit.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
                                         subreddit.add_contributor(user)
-                                        message.reply("Verification has been successful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
+                                        message.reply("Verification has been successful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the verification message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
 
                                         global lounge
                                         lounge.add_contributor(user)
@@ -485,8 +487,9 @@ def check_messages():
                                         print("Verified and set flair for " + user)
                                     except:
                                         message.reply("An unknown error occurred during flair assignment. You passed the flair eligibility test but something went wrong - this could be due to reddit being overloaded. Please try again, or if you've seen this message more than once then contact the mods directly. Sorry about that :\\")
+                                        r.send_message(recipient="theonefoster", subject="Failed flair assignment", message="/u/" + user + " passed flair eligibility but assignment failed. Please ensure their flair is set correctly on /r/asmr and /r/asmrCreatorLounge, and that they are an approved submitter on both subreddits. \n\n Channel was: " + channel_name)
                                 else:
-                                    message.reply("Unfortunately your channel needs to have at least 12 published videos to be eligible for subreddit flair, but you've only published " + str(video_count) + " so far. Thanks for applying though, and feel free to check back once you've published 12 videos.")
+                                    message.reply("Unfortunately your channel needs to have at least 15 published videos to be eligible for subreddit flair, but you've only published " + str(video_count) + " so far. Thanks for applying though, and feel free to check back once you've published 12 videos.")
                                     print("flair verification for " + channel_name + " failed - not enough published videos.")
                             else:
                                 message.reply("Unfortunately your channel needs to be at least 6 months (182 days) old to be eligible for subreddit flair. Thanks for applying, and feel free to check back when your channel is old enough!")
@@ -512,12 +515,12 @@ Please make sure that the username/ID is exactly correct as it appears on youtub
                 print("Command not recognised. Message was " + message.body)
                 message.reply("Sorry, I don't recognise that command. If you're trying to request a flair, read [the instructions here](https://www.reddit.com/r/asmr/wiki/flair_requests). For other commands you can send me, read the [asmr_bot wiki page](https://www.reddit.com/r/asmr/wiki/asmr_bot). If you have any questions or feedback, please message /u/theonefoster.")
         else:
-            message.reply("I'm a bot, so I can't read replies to my comments. If you have some feedback please message /u/theonefoster.")
+            message.reply("I'm a bot, so I can't read replies to my comments. If you have some feedback please message /u/theonefoster.").distinguish()
         message.mark_as_read()
 
 def title_has_two_tags(title):
-    twoTagsRegex = re.compile('.*\[(intentional|unintentional|roleplay|role play|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|role play|media|article|discussion|question|meta|request)\].*', re.I)
-    return (re.search(twoTagsRegex, title) is not None) # search the title for two tags; if two are found return true, else return false
+    two_tags_regex = re.compile('.*\[(intentional|unintentional|roleplay|role play|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|role play|media|article|discussion|question|meta|request)\].*', re.I)
+    return (re.search(two_tags_regex, title) is not None) # search the title for two tags; if two are found return true, else return false
 
 def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
     toplist = shelve.open("topPosts","c")
@@ -581,7 +584,7 @@ def user_is_shadowbanned(username):
     except praw.errors.HTTPException:
         return True
     except Exception as e:
-        print("Unknown exception when checking shadowban for user " + username + " - exception code: \"" + str(e) + "\"")
+        print("Unknown exception when checking shadowban for user {user_name} - exception code: \"{code}\"".format(user_name=username, code=str(e)))
         #traceback.print_exc()
         return False
 
@@ -595,10 +598,6 @@ def submission_is_deleted(id):
 def add_warning(post): # post is a reddit 'thing' (comment or submission) for which the author is receiving a warning
     user = post.author.name
     ordinal = "?"
-    # curWar.execute("DELETE FROM warnings WHERE name=?", [user])
-    # sqlWar.commit()
-    # print "deleted."
-    # time.sleep(1000000)
 
     warnings_cursor.execute("SELECT * FROM warnings WHERE name=?", [user])
     result = warnings_cursor.fetchone()
@@ -805,7 +804,7 @@ while True:
         except Exception as f:
             print(str(f))
             print("Sleeping..")
-            time.sleep(30) # usually rate limits or 503. Sleeping reduces reddit load.
+            time.sleep(30) # usually 503. Sleeping reduces reddit load.
     finally:
         r.handler.clear_cache()
 
@@ -823,4 +822,4 @@ while True:
 
         first_run = False
 
-        time.sleep(9) # reduces reddit load and unnecessary processor usage
+        time.sleep(8) # reduces reddit load and unnecessary processor usage
