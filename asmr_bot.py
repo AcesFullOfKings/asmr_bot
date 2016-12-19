@@ -29,7 +29,7 @@ app_secret = d.app_secret
 app_URI = d.app_URI
 app_refresh_token = d.app_refresh_token
 bad_title_phrases = d.bad_title_phrases
-banned_channels = d.BANNED_CHANNELS
+#banned_channels = d.BANNED_CHANNELS
 
 # gdata details
 g_browser_key = d.g_browser_key
@@ -40,6 +40,7 @@ viewed_mod_queue = set()
 modqueue_is_full = True #if bot is restarted it will wait for empty modqueue before full queue notifications begin
 unactioned_modqueue = queue.Queue(0)
 first_run = True #does a lot more processing on first run to catch up with anything missed during downtime
+banned_channels = set()
 
 # Messages
 meta_explain = d.META_EXPLAIN
@@ -54,6 +55,7 @@ unlisted_explain = d.UNLISTED_COMMENT
 spam_explain = d.SPAM_COMMENT
 repost_explain = d.REPOST_COMMENT
 channel_or_playlist_explain = d.CHANNEL_PLAYLIST_EXPLAIN
+flair_errors = d.flair_errors
 del(d)
 
 vidIDregex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
@@ -136,6 +138,18 @@ def days_since_youtube_channel_creation(**kwargs):
 
 def video_is_unlisted(ID):
     return get_youtube_video_data("videos", "status", "id", ID, "privacyStatus") == "unlisted"
+
+def get_vid_id(url):
+    if "attribution_link" in url:
+        result = attribution_regex.split(url)
+        vid_id = result[1]
+    elif "youtube." in url or "youtu.be" in url:
+        result = vidIDregex.split(url)
+        vid_id = result[5]
+    else:
+        return -1
+
+    return vid_id
 
 def check_mod_queue():
     global modqueue_is_full
@@ -316,16 +330,11 @@ def check_submissions():
                     if is_banned_link(submission.url):
                         submission.remove(False)
                         submission.add_comment(channel_or_playlist_explain).distinguish(sticky=True)
-                        print("Removing submission " + submission.short_link + " (link to channel/playlist)")
+                        print("Removing submission " + submission.id + " (link to channel/playlist)")
                     else:
                         if ("youtube." in submission.url or "youtu.be" in submission.url):
                             is_youtube_link = True
-                            if "attribution_link" in submission.url:
-                                result = attribution_regex.split(submission.url)
-                                vid_id = result[1]
-                            else:
-                                result = vidIDregex.split(submission.url)
-                                vid_id = result[5]
+                            vid_id = get_vid_id(submission.url)
 
                         if is_youtube_link:
                             channel_id = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelId")                  
@@ -334,7 +343,7 @@ def check_submissions():
                             if channel_id in banned_channels:
                                 submission.remove(False) # checks for banned youtube channels
                                 submission.add_comment(banned_channel_explain).distinguish(sticky=True)
-                                print("Removing submission " + submission.short_link + " (banned youtube channel)..")
+                                print("Removing submission " + submission.id + " (banned youtube channel)..")
                                 removed = True
                             elif video_is_unlisted(vid_id):
                                 submission.remove(False)
@@ -357,7 +366,7 @@ def check_submissions():
                                     comment = repost_explain.format(old_link=old_post.permalink)
                                     submission.add_comment(comment).distinguish(sticky=True)
                                     removed = True
-                                    print("Removing submission " + submission.short_link + " (reposted video)..")
+                                    print("Removing submission " + submission.id + " (reposted video)..")
 
                             if not removed: #successful submission (youtube links only)
                                 my_sub = my_submission_type()
@@ -434,88 +443,96 @@ def check_messages():
                 try:
                     id = message.subject[-6:]
                     submission = r.get_info(thing_id = "t3_" + id)
-                    if message.author.name == submission.author.name and submission.link_flair_text != "ROLEPLAY":
-                        print("Assigning roleplay flair..")
-                        submission.set_flair("ROLEPLAY", "roleplay")
-                        message.reply("Thanks! I've updated your submission's flair for you :)")
-                    else:
+                    if message.author.name == submission.author.name:
+                        if submission.link_flair_text != "ROLEPLAY": #flair if needed and message is from OP
+                            print("Assigning roleplay flair..")
+                            submission.set_flair("ROLEPLAY", "roleplay")
+                            message.reply("Thanks! I've updated your submission's flair for you :)")
+                        else: #if message from OP and no flair needed
+                            if any(thank in message.body.lower() for thank in ["thanks", "thankyou", "thank you", "thx", "cheers"]):
+                                message.reply("You're welcome, human.")
+                            else:
+                                pass # ignore further messages
+                    else: #message not from OP
                         message.reply("Command failed - you can't edit flair on other people's submissions.")
                 except: # if it fails, oh well
                     message.reply("Command failed for unknown reason. Please [contact mods on modmail](https://www.reddit.com/message/compose?to=%2Fr%2Fasmr)")
             elif(message.subject == "flair request" or message.subject == "re: flair request"): # set flair
+                
+                global flair_errors
 
                 using_id = False
                 channel_name = message.body
-                des = get_youtube_video_data("channels", "snippet", "forUsername", channel_name, "description") # des as in description #tested
-            
-                if des == -1:
-                    des = get_youtube_video_data("channels", "snippet", "id", message.body, "description")
+                description = get_youtube_video_data("channels", "snippet", "forUsername", channel_name, "description")
+                
+                if description == -1:
+                    description = get_youtube_video_data("channels", "snippet", "id", message.body, "description")
                     channel_name = get_youtube_video_data("channels", "snippet", "id", message.body, "title")
                     using_id = True
 
-                if des != -1:
-                    if "hey /r/asmr mods!" in des.lower():
-                        if using_id:
-                            subs = int(get_youtube_video_data("channels", "statistics", "id", message.body, "subscriberCount"))
-                        else:
-                            subs = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "subscriberCount"))
-
-                        if subs >= 1000:
-                            if using_id:
-                                age = days_since_youtube_channel_creation(id=message.body)
-                            else:
-                                age = days_since_youtube_channel_creation(name=channel_name)
-
-                            if age > 182:
-
-                                if using_id:
-                                    video_count = int(get_youtube_video_data("channels", "statistics", "id", message.body, "videoCount"))
-                                else:
-                                    video_count = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "videoCount"))
-
-                                if video_count >= 15:
-                                    try:
-                                        global subreddit
-                                        subreddit.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
-                                        subreddit.add_contributor(user)
-                                        message.reply("Verification has been successful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the verification message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
-
-                                        global lounge
-                                        lounge.add_contributor(user)
-                                        lounge.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
-
-                                        print("Verified and set flair for " + user)
-                                    except:
-                                        message.reply("An unknown error occurred during flair assignment. You passed the flair eligibility test but something went wrong - this could be due to reddit being overloaded. Please try again, or if you've seen this message more than once then contact the mods directly. Sorry about that :\\")
-                                        r.send_message(recipient="theonefoster", subject="Failed flair assignment", message="/u/" + user + " passed flair eligibility but assignment failed. Please ensure their flair is set correctly on /r/asmr and /r/asmrCreatorLounge, and that they are an approved submitter on both subreddits. \n\n Channel was: " + channel_name)
-                                else:
-                                    message.reply("Unfortunately your channel needs to have at least 15 published videos to be eligible for subreddit flair, but you've only published " + str(video_count) + " so far. Thanks for applying though, and feel free to check back once you've published 12 videos.")
-                                    print("flair verification for " + channel_name + " failed - not enough published videos.")
-                            else:
-                                message.reply("Unfortunately your channel needs to be at least 6 months (182 days) old to be eligible for subreddit flair. Thanks for applying, and feel free to check back when your channel is old enough!")
-                                print("flair verification for " + channel_name + " failed - channel too new.")
-                        else:
-                            message.reply("Unfortunately you need to have 1000 youtube subscribers to qualify for flair. You only have " + str(subs) + " at the moment, but come back once you reach 1000!")
-                            print("flair verification for " + channel_name + " failed - not enough subs.")
+                if description != -1:
+                    if using_id:
+                        subs = int(get_youtube_video_data("channels", "statistics", "id", message.body, "subscriberCount"))
                     else:
-                        message.reply("I couldn't see the verification message in your channel description. Please make sure you include the exact phrase '**Hey \\/r/asmr mods!**' (without the quotes) in your youtube channel description so I can verify that you really own that channel. You should remove the verification message as soon as you've been verified.")
-                        print("flair verification for " + channel_name + " failed - no verification message.")
+                        subs = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "subscriberCount"))
+
+                    if subs >= 1000:
+                        if using_id:
+                            age = days_since_youtube_channel_creation(id=message.body)
+                        else:
+                            age = days_since_youtube_channel_creation(name=channel_name)
+
+                        if age > 182:
+
+                            if using_id:
+                                video_count = int(get_youtube_video_data("channels", "statistics", "id", message.body, "videoCount"))
+                            else:
+                                video_count = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "videoCount"))
+
+                            if video_count >= 15:
+                                if user_is_active(user, channel_name):
+                                    if "hey /r/asmr mods!" in description.lower():
+                                        try:
+                                            global subreddit
+                                            subreddit.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
+                                            subreddit.add_contributor(user)
+                                            message.reply("Verification has been successful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the verification message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
+
+                                            global lounge
+                                            lounge.add_contributor(user)
+                                            lounge.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
+                                            print("Verified and set flair for " + user)
+                                        except:
+                                            message.reply(flair_errors.unknown_error)
+                                            r.send_message(recipient="theonefoster", subject="Failed flair assignment", message="/u/" + user + " passed flair eligibility but assignment failed. Please ensure their flair is set correctly on /r/asmr and /r/asmrCreatorLounge, and that they are an approved submitter on both subreddits. \n\n Channel was: " + channel_name)
+                                    else:
+                                        message.reply(flair_errors.no_verification)
+                                        print("flair verification for " + channel_name + " failed - no verification message.")
+                                else:
+                                    message.reply(flair_errors.inactive)
+                                    print("flair verification for " + channel_name + " failed - not enough subreddit activity.")
+                            else:
+                                message.reply(flair_errors.not_enough_videos.format(vid_count = str(video_count)))
+                                print("flair verification for " + channel_name + " failed - not enough published videos.")
+                        else:
+                            message.reply(flair_errors.underage)
+                            print("flair verification for " + channel_name + " failed - channel too new.")
+                    else:
+                        message.reply(flair_errors.not_enough_subs.format(current_subs=str(subs)))
+                        print("flair verification for " + channel_name + " failed - not enough subs.")
                 else:
-                    message.reply("""
-Sorry, I couldn't find that channel. You can use either the channel name (eg 'asmrtess') or the channel ID (the messy part in the youtube link - go to your page and get just the ID from the URL in the format youtube.com/channel/<ID>, eg "UCb3fNzphmiwDgHO2Yg319uw"). Sending ONLY the username OR the ID will work. 
-                
-Please make sure that the username/ID is exactly correct as it appears on youtube, and that you're not sending anything but the username or channel ID - for example spaces either side of the username/ID or extra text apart from the username/ID (sending the full "youtube.com" link won't work). See [the wiki page](/r/asmr/wiki/flair_requests) for full instructions. If you're still having problems, please [message the human mods](https://www.reddit.com/message/compose?to=%2Fr%2Fasmr)""")
+                    message.reply(flair_errors.channel_not_found)
                     print("flair verification failed - channel not found. Message was: " + message.body)
             elif(message.subject == "delete flair"): # delete flair
                 if message.body == "delete flair":
                     r.delete_flair(subreddit="asmr", user=user)
-                    message.reply("Your flair has been deleted. You may still submit to and view the /r/asmrCreatorLounge subreddit if you choose. To apply for flair again, use [this link.](https://www.reddit.com/message/compose?to=asmr_bot&subject=flair%20request&message=enter your channel name here)")
+                    message.reply(flair_errors.flair_deleted)
                     print("Flair deleted for " + user)
             elif("post reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
                 print("Command not recognised. Message was " + message.body)
-                message.reply("Sorry, I don't recognise that command. If you're trying to request a flair, read [the instructions here](https://www.reddit.com/r/asmr/wiki/flair_requests). For other commands you can send me, read the [asmr_bot wiki page](https://www.reddit.com/r/asmr/wiki/asmr_bot). If you have any questions or feedback, please message /u/theonefoster.")
+                message.reply(command_not_recognised)
         else:
-            message.reply("I'm a bot, so I can't read replies to my comments. If you have some feedback please message /u/theonefoster.").distinguish()
+            message.reply(comment_reply).distinguish()
         message.mark_as_read()
 
 def title_has_two_tags(title):
@@ -574,8 +591,93 @@ def recommend_top_submission():
 
     return rtn
 
-def user_is_active(username):# TODO
-    return True
+def user_is_active(username, channel_name=""):
+
+
+    return True # not fully implemented yet TODO
+
+
+
+    user = r.get_redditor(username)
+
+    time_limit = time.time()-10800000 # 125 days ago (4 months)
+    old_time_limit = time.time()-2592000 # 30 days ago
+
+    comments = list(user.get_comments(sort="new", time="year", limit=500)) # all comments by user 
+    old_comments = [] # comments older than 30 days
+    other_comments = [] # comments younger than 120 days on submissions other than their own
+    old_other_comments = [] # comments older than 30 days and younger than 120 days and on submissions other than their own
+
+    submissions = list(user.get_submitted(sort="new", time="year", limit=500)) #all submissions by user
+    old_submissions = [] # submissions older than 30 days
+    other_submissions = [] # submissions younger than 120 days to channels other than their own
+    old_other_submissions = [] # submissions older than 30 days and younger than 120 days and on submissions to youtube channels other than their own
+
+    for comment in list(comments): # copy list for iteration
+        try:
+            if comment.subreddit.display_name == subreddit.display_name: # if comment in /r/asmr
+                if comment.created_utc > time_limit: # and was <120 days ago 
+                    if comment.link_author != username: # commented on someone else's submission
+                        other_comments.append(comment) # other_comments list
+
+                    if comment.created_utc < old_time_limit: # comment was 30<=days<120 ago
+                        old_comments.append(comment) # list of comments from 30-120 days ago
+                        if comment.link_author != username:
+                            old_other_comments.append(comment) # old_other_comments list
+                    else: # comments less than 30 days ago
+                        pass # don't remove comment from comments
+                else:
+                    comments.remove(comment) # remove comments from more than 120 days ago
+            else:
+                comments.remove(comment) # don't care about comments in other subreddits
+        except AttributeError:
+            # will except e.g. if parent submission is deleted
+            # must have been in /r/asmr and later than 120 days ago
+            # so assume it's ok and leave it in the comments list
+            pass
+    for submission in list(submissions): # copy list for iteration
+        if submission.subreddit.display_name == subreddit.display_name: # if submission in /r/asmr
+            if submission.created_utc > time_limit: # and was <120 days ago 
+
+                vid_id = get_vid_id(submission.url)
+                if vid_id != -1: # if submission links to youtube. Otherwise it's a text submission or other external link
+                    youtube_author = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelTitle")
+
+                    if youtube_author != channel_name: # submission of someone else's video
+                        other_submissions.append(submission) # create other_submissions list
+
+                    if submission.created_utc < old_time_limit: # submission was 30<=days<120 ago
+                        old_submissions.append(submission) # create a list of submissions from 30-120 days ago
+                        if youtube_author != channel_name:
+                            old_other_submissions.append(submission) #create old_other_submissions list
+                    else: # submissions less than 30 days ago
+                        pass # don't remove submission from submissions
+                else:
+                    other_submissions.append(submission)
+
+                    if submission.created_utc < old_time_limit: 
+                        old_other_submissions.append(submission)
+            else:
+                submissions.remove(submission) # remove submissions from more than 120 days ago
+        else:
+            submissions.remove(submission) #don't care about submissions in other subreddits
+
+    # comments now contains all comments by user in /r/asmr after 90 days ago
+    # old_comments is a subset of comments in /r/asmr containing comments from before 30 days ago
+    # ditto for submissions
+
+    if  (      len(comments) < 8 # at least 2 overall comments per month
+            or len(old_comments) < 6  # at least 2 historical comments per month
+            or len(submissions) < 4 # at least 1 submission per month
+            or len(old_submissions) < 3 # at least 1 historical submissions per month
+        ):#    or len(other_comments) < 4 # at least 1 communal comment per month overall
+          #  or len(old_other_comments) < 3 # at least 1 historical communal comment per month (on someone else's submission)
+          #  or len(other_submissions) < 2 # at least 2 overall communal submissions
+          #  or len(old_other_submissions) < 1 # at least 1 historical communal submissions
+       # ): #sad
+            return False
+    else:
+        return True
 
 def user_is_shadowbanned(username):
     try:
@@ -584,7 +686,7 @@ def user_is_shadowbanned(username):
     except praw.errors.HTTPException:
         return True
     except Exception as e:
-        print("Unknown exception when checking shadowban for user {user_name} - exception code: \"{code}\"".format(user_name=username, code=str(e)))
+        print("\n\nUnknown exception when checking shadowban for user {user_name} - exception code: \"{code}\"\n\n".format(user_name=username, code=str(e)))
         #traceback.print_exc()
         return False
 
@@ -753,10 +855,18 @@ def clear_video_submissions():
 
     recent_video_data["videos"] = submissions_dict
 
+def get_banned_channels():
+    try:
+        global banned_channels
+        wiki = subreddit.get_wiki_page("banned")
+        banned_channels = eval(wiki.content_md)
+    except Exception as ex:
+        r.send_message(recipient="theonefoster", subject="Error getting banned channels", message="Exeption when getting banned channels!\n\n" + str(ex) + "\n\n /r/asmr/wiki/banned")
+
 def login():
     print("logging in..")
     r = praw.Reddit(app_user_agent, disable_update_check=True)
-    r.set_oauth_app_info(app_id,app_secret, app_URI)
+    r.set_oauth_app_info(app_id, app_secret, app_URI)
     r.refresh_access_information(app_refresh_token)
     print("logged in as " + str(r.user.name))
     return r
@@ -773,53 +883,61 @@ def asmr_bot():
 # ----------------------------
 
 r = login()
-tof = theonefoster_bot.login()
-del(theonefoster_bot)
 subreddit = r.get_subreddit("asmr")
-lounge = r.get_subreddit("asmrcreatorlounge")
 
-schedule.every().thursday.at("23:50").do(remove_ffaf)
-schedule.every().wednesday.at("18:00").do(remove_tech_tuesday)
-schedule.every(14).days.at("03:00").do(update_top_submissions) #once per fortnight ish
-schedule.every().hour.do(clear_user_submissions)
-schedule.every().day.do(update_seen_objects)
-schedule.every().day.at("02:00").do(clear_video_submissions) #once per day
+if __name__ == "__main__":
+    tof = theonefoster_bot.login()
+    del(theonefoster_bot)
+    lounge = r.get_subreddit("asmrcreatorlounge")
 
-while True:
-    try:
-        asmr_bot()
-    except praw.errors.HTTPException as e:
+    print("Fetching banned channels..")
+    get_banned_channels()
+
+    schedule.every().thursday.at("23:50").do(remove_ffaf)
+    schedule.every().wednesday.at("18:00").do(remove_tech_tuesday)
+    schedule.every(14).days.at("03:00").do(update_top_submissions) #once per fortnight ish
+    schedule.every().hour.do(clear_user_submissions)
+    schedule.every().day.do(update_seen_objects)
+    schedule.every().day.at("02:00").do(clear_video_submissions) #once per day
+    schedule.every().hour.do(get_banned_channels)
+
+    print("Setup complete. Starting bot duties.")
+
+    while True:
         try:
-            print("HTTP Exception: " + str(e))
-            r = login()
-        except Exception as f:
-            print("Login failed: " + str(f))
-            print ("Sleeping....")
-            time.sleep(30)
-    except Exception as e:
-        print("Unknown exception: " + str(e))
-        #traceback.print_exc()
-        try:
-            r = login()
-        except Exception as f:
-            print(str(f))
-            print("Sleeping..")
-            time.sleep(30) # usually 503. Sleeping reduces reddit load.
-    finally:
-        r.handler.clear_cache()
+            asmr_bot()
+        except praw.errors.HTTPException as e:
+            try:
+                print("HTTP Exception: " + str(e))
+                r = login()
+            except Exception as f:
+                print("Login failed: " + str(f))
+                print ("Sleeping....")
+                time.sleep(30)
+        except Exception as e:
+            print("Unknown exception: " + str(e))
+            #traceback.print_exc()
+            try:
+                r = login()
+            except Exception as f:
+                print(str(f))
+                print("Sleeping..")
+                time.sleep(30) # usually 503. Sleeping reduces reddit load.
+        finally:
+            r.handler.clear_cache()
 
-        recent_video_data.sync()
-        user_submission_data.sync()
-        seen_objects.sync()
+            recent_video_data.sync()
+            user_submission_data.sync()
+            seen_objects.sync()
 
-        recent_video_data.close()
-        user_submission_data.close()
-        seen_objects.close()
+            recent_video_data.close()
+            user_submission_data.close()
+            seen_objects.close()
 
-        user_submission_data = shelve.open("user_submission_data", "c") # all submissions from past day by author
-        recent_video_data = shelve.open("recent_video_data", "c") # videos submitted over past 3 months
-        seen_objects = shelve.open("seen_objects", "c") # track which objects have been seen
+            user_submission_data = shelve.open("user_submission_data", "c") # all submissions from past day by author
+            recent_video_data = shelve.open("recent_video_data", "c") # videos submitted over past 3 months
+            seen_objects = shelve.open("seen_objects", "c") # track which objects have been seen
 
-        first_run = False
+            first_run = False
 
-        time.sleep(8) # reduces reddit load and unnecessary processor usage
+            time.sleep(8) # reduces reddit load and unnecessary processor usage
