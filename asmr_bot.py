@@ -176,8 +176,8 @@ def check_mod_queue():
 
             if user_is_shadowbanned(item.author.name):
                 print("Replying to shadowbanned user " + item.author.name)
-             
-                if item.fullname.startswith("t3"):  # submission
+            
+            if item.fullname.startswith("t3"):  # submission
                     item.remove(False)
                     item.add_comment(sb_explain).distinguish(sticky=True)
                 elif item.fullname.startswith("t1"): # comment
@@ -520,7 +520,7 @@ def check_messages():
                     print("Flair deleted for " + user)
             elif("post reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
                 print("Command not recognised. Message was " + message.body)
-                message.reply(command_not_recognised)
+                message.reply(flair_errors.command_not_recognised)
         else:
             print("Replying to comment in messages..")
             message.reply(comment_reply).distinguish()
