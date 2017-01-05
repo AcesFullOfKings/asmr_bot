@@ -56,9 +56,10 @@ spam_explain = d.SPAM_COMMENT
 repost_explain = d.REPOST_COMMENT
 channel_or_playlist_explain = d.CHANNEL_PLAYLIST_EXPLAIN
 flair_errors = d.flair_errors
+comment_reply = d.comment_reply
 del(d)
 
-vidIDregex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
+vid_id_regex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
 attribution_regex = re.compile("\/attribution_link\?.*v%3D([^%&]*)(%26|&|$)")
 
 # open shelves
@@ -144,7 +145,7 @@ def get_vid_id(url):
         result = attribution_regex.split(url)
         vid_id = result[1]
     elif "youtube." in url or "youtu.be" in url:
-        result = vidIDregex.split(url)
+        result = vid_id_regex.split(url)
         vid_id = result[5]
     else:
         return -1
@@ -227,74 +228,80 @@ def check_comments():
 
                 if (comment_author in mod_list):
                     if ('!bot-meta' in comment_body):
-                        print("Comment found! Replying to " + comment_author + " (bad meta post)")
-                        if comment_author == "theonefoster":
-                            my_comment = tof.get_info(thing_id = comment.fullname)
-                            my_comment.delete()
-                        else:
-                            comment.remove(False)
+                        print("Comment found! Removing submission in response to " + comment_author + " (bad meta post)")
+                        remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
                         submission.add_comment(meta_explain).distinguish(sticky=True)
                     elif ('!bot-mus' in comment_body):
-                        print("Comment found! Replying to " + comment_author + " (music)")
-                        if comment_author == "theonefoster":
-                            my_comment = tof.get_info(thing_id = comment.fullname)
-                            my_comment.delete()
-                        else:
-                            comment.remove(False)
+                        print("Comment found! Removing submission in response to " + comment_author + " (music)")
+                        remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
                         submission.add_comment(mus_explain).distinguish(sticky=True)
                     elif ('!bot-title' in comment_body):
-                        print("Comment found! Replying to " + comment_author + " (bad title)")
-                        if comment_author == "theonefoster":
-                            my_comment = tof.get_info(thing_id = comment.fullname)
-                            my_comment.delete()
-                        else:
-                            comment.remove(False)
+                        print("Comment found! Removing submission in response to " + comment_author + " (bad title)")
+                        remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
                         submission.add_comment(mod_title_explain).distinguish(sticky=True)
                     elif ("!bot-warning" in comment_body):
-                        print("Comment found! Replying to " + comment_author + " (add warning)")
-                        if comment_author == "theonefoster":
-                            my_comment = tof.get_info(thing_id = comment.fullname)
-                            my_comment.delete()
-                        else:
-                            comment.remove(False)
+                        print("Comment found! Removing post in response to " + comment_author + " (add warning)")
+                        remove_mod_comment(comment)
                         parent = r.get_info(thing_id=comment.parent_id)
                         add_warning(parent)
                     elif("!bot-purge" in comment_body):
-                        print("Comment found! Replying to " + comment_author + " (kill thread)")
+                        print("Comment found! Removing comment tree in response to " + comment_author + " (kill thread)")
                         try:
                             parent = r.get_info(thing_id=comment.parent_id)
                             if parent.fullname.startswith("t1"):# TODO - this isn't necessary I think
                                 parent = get_comment_from_submission(parent)
                                 purge_thread(parent)
-                                if comment_author == "theonefoster":
-                                    my_comment = tof.get_info(thing_id = comment.fullname)
-                                    my_comment.delete()
                             else:
-                                if comment_author == "theonefoster":
-                                    my_comment = tof.get_info(thing_id = comment.fullname)
-                                    my_comment.delete()
-                                else:
-                                    comment.remove(False)
-                                r.send_message(comment_author, "Failed command", "The !bot-purge command can only be used in reply to a top-level comment. This is due to reddit API restrictions.") #todo: wat
+                                r.send_message(comment_author, "Failed command", "The !bot-purge command can only be used in reply to a comment. This is due to reddit API restrictions.") #todo: wat
+                            
+                            remove_mod_comment(comment)
                         except Exception as e:
                             print("Exception when purging comment tree - "+str(e)+"\nParent was " + parent.id)
                             #traceback.print_exc()
                             r.send_message(comment_author, "Failed command", "Your purge command failed for an unknown reason. Your comment was removed.")
                         finally:
                             comment.remove(False)
+                    elif "!ban" == comment_body[:4]:
+                        reason = comment_body[5:]
+                        if reason == "":
+                            reason = "<No reason given>"
+                        parent = r.get_info(thing_id=comment.parent_id)
+                        ban_user = parent.author.name
+                        msg = "You have been automatically banned for [your post here]({link})."
 
-            except AttributeError: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
-                print("Attribute Error! Comment was probably deleted.")
+                        print("Banning user {ban_user} for post {post}: {reason}".format(ban_user=ban_user, post=parent.id, reason=reason))
+                        parent.remove(False)
+                        remove_mod_comment(comment)
+                        
+                        note = comment.author.name + ": " + reason
+                        subreddit.add_ban(ban_user, note=note, ban_message=msg.format(link=parent.permalink))
+
+                        message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\>{reason} \n\n Ban list: /r/asmr/about/banned"
+
+                        r.send_message(comment_author, "Ban successful", message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
+
+            except AttributeError as ex: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
+                print("Attribute Error! Comment was probably deleted. Comment was " + str(comment.fullname))
+                print(str(ex))
                 #traceback.print_exc()
+
+def remove_mod_comment(comment):
+    """If comment was made by me, I have the authentication to delete it, which is preferred. Otherwise Remove it since I can't delete other mods' comments
+    """
+    if comment.author.name == "theonefoster":
+        my_comment = tof.get_info(thing_id = comment.fullname)
+        my_comment.delete()
+    else:
+        comment.remove(False)
     
 def check_submissions():
     global first_run
@@ -306,7 +313,6 @@ def check_submissions():
 
     submissions = list(subreddit.get_new(limit=limit))
 
-
     for submission in submissions:
         if submission.id not in seen_objects["submissions"]: 
             seen_submissions = seen_objects["submissions"]
@@ -315,7 +321,6 @@ def check_submissions():
             seen_objects.sync()
             
             # for each new submission..
-            
             if(title_has_two_tags(submission.title)):
                 submission.remove(False)
                 submission.add_comment(two_tags_explain).distinguish(sticky=True)
@@ -405,10 +410,10 @@ def check_submissions():
                                         submission.add_comment(spam_explain).distinguish(sticky=True)
                                         print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
                                     
-                                        submissionlinks = submission.permalink + "\n\n"
+                                        submission_links = submission.permalink + "\n\n"
                                     
                                         for s in user_submission_list:
-                                            submissionlinks += s.sub_permalink + "\n\n"
+                                            submission_links += s.sub_permalink + "\n\n"
                                             sub_to_remove = r.get_info(thing_id="t3_" + s.sub_ID)
                                             sub_to_remove.remove(False)
 
@@ -417,18 +422,22 @@ def check_submissions():
                                         note = "too many links to same youtube channel - 1-day ban"
                                         msg = "Warning ban for spamming links to a youtube channel"
                                         subreddit.add_ban(submission.author, duration=1, note=note, ban_message=msg)
-                                        r.send_message("/r/" + subreddit.display_name, "Ban Notification", "I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **1 day only**. \n\nLinks to the offending submissions:\n\n" + submissionlinks)
+                                        r.send_message("/r/" + subreddit.display_name, "Ban Notification", "I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **1 day only**. \n\nLinks to the offending submissions:\n\n" + submission_links)
                                     else:
                                         subs = user_submission_data["submissions"]  #copy dict
                                         l = subs[submission.author.name] # get list of user submissions
                                         l.append(my_sub) #append submission to list
                                         subs[submission.author.name] = l # update dict value
                                         user_submission_data["submissions"] = subs #write dict back to shelve 
-                except Exception as e:
-                    print("exception on removal of submission " + submission.short_link + " - " + str(e))
+                except Exception as ex:
+                    print("exception on removal of submission " + submission.short_link + " - " + str(ex))
+                    
+                    if "ran out of input" in str(ex).lower():
+                        break
+                    
 
 def check_messages():
-    messages = list(r.get_unread(limit=10))
+    messages = list(r.get_unread()) 
 
     for message in messages:
         if not message.was_comment:
@@ -504,7 +513,7 @@ def check_messages():
                                             print("Verified and set flair for " + user)
                                         except:
                                             message.reply(flair_errors.unknown_error)
-                                            r.send_message(recipient="theonefoster", subject="Failed flair assignment", message="/u/" + user + " passed flair eligibility but assignment failed. Please ensure their flair is set correctly on /r/asmr and /r/asmrCreatorLounge, and that they are an approved submitter on both subreddits. \n\n Channel was: " + channel_name)
+                                            r.send_message(recipient="theonefoster", subject="Failed flair assignment", message="/u/" + user + " passed flair eligibility but flair assignment failed. Please ensure their flair is set correctly on /r/asmr and /r/asmrCreatorLounge, and that they are an approved submitter on both subreddits. \n\nChannel was: " + channel_name)
                                     else:
                                         message.reply(flair_errors.no_verification)
                                         print("flair verification for " + channel_name + " failed - no verification message.")
@@ -532,12 +541,22 @@ def check_messages():
                 print("Command not recognised. Message was " + message.body)
                 message.reply(command_not_recognised)
         else:
+            print("Replying to comment in messages..")
             message.reply(comment_reply).distinguish()
         message.mark_as_read()
 
 def title_has_two_tags(title):
+    title = title.lower()
     two_tags_regex = re.compile('.*\[(intentional|unintentional|roleplay|role play|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|role play|media|article|discussion|question|meta|request)\].*', re.I)
-    return (re.search(two_tags_regex, title) is not None) # search the title for two tags; if two are found return true, else return false
+    two_tags = (re.search(two_tags_regex, title) is not None) # search the title for two tags; if two are found set true, else set false
+
+    if two_tags:
+        if "[intentional]" in title:
+            if "[roleplay]" in title or "[role play]" in title:
+                return False #if the two tags are [intentional] and [roleplay] then allow it
+        return True # two tags in title but not intentional and roleplay
+    else:
+        return False
 
 def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
     toplist = shelve.open("topPosts","c")
@@ -551,7 +570,7 @@ def update_top_submissions(): # updates recommendation database. Doesn't usually
         print("Got submission " + submission.id + "(" + str(total_count) + ")")
         if (".youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
             try:
-                result = vidIDregex.split(submission.url)
+                result = vid_id_regex.split(submission.url)
                 vid_id = result[5]
                 channel_name = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelTitle")
                 vid_title = get_youtube_video_data("videos", "snippet", "id", vid_id, "title")
@@ -593,91 +612,89 @@ def recommend_top_submission():
 
 def user_is_active(username, channel_name=""):
 
-
     return True # not fully implemented yet TODO
 
+    if False: #so I can collapse it in VS :)
+        user = r.get_redditor(username)
 
+        time_limit = time.time()-10800000 # 125 days ago (4 months)
+        old_time_limit = time.time()-2592000 # 30 days ago
 
-    user = r.get_redditor(username)
+        comments = list(user.get_comments(sort="new", time="year", limit=500)) # all comments by user 
+        old_comments = [] # comments older than 30 days
+        other_comments = [] # comments younger than 120 days on submissions other than their own
+        old_other_comments = [] # comments older than 30 days and younger than 120 days and on submissions other than their own
 
-    time_limit = time.time()-10800000 # 125 days ago (4 months)
-    old_time_limit = time.time()-2592000 # 30 days ago
+        submissions = list(user.get_submitted(sort="new", time="year", limit=500)) #all submissions by user
+        old_submissions = [] # submissions older than 30 days
+        other_submissions = [] # submissions younger than 120 days to channels other than their own
+        old_other_submissions = [] # submissions older than 30 days and younger than 120 days and on submissions to youtube channels other than their own
 
-    comments = list(user.get_comments(sort="new", time="year", limit=500)) # all comments by user 
-    old_comments = [] # comments older than 30 days
-    other_comments = [] # comments younger than 120 days on submissions other than their own
-    old_other_comments = [] # comments older than 30 days and younger than 120 days and on submissions other than their own
+        for comment in list(comments): # copy list for iteration
+            try:
+                if comment.subreddit.display_name == subreddit.display_name: # if comment in /r/asmr
+                    if comment.created_utc > time_limit: # and was <120 days ago 
+                        if comment.link_author != username: # commented on someone else's submission
+                            other_comments.append(comment) # other_comments list
 
-    submissions = list(user.get_submitted(sort="new", time="year", limit=500)) #all submissions by user
-    old_submissions = [] # submissions older than 30 days
-    other_submissions = [] # submissions younger than 120 days to channels other than their own
-    old_other_submissions = [] # submissions older than 30 days and younger than 120 days and on submissions to youtube channels other than their own
-
-    for comment in list(comments): # copy list for iteration
-        try:
-            if comment.subreddit.display_name == subreddit.display_name: # if comment in /r/asmr
-                if comment.created_utc > time_limit: # and was <120 days ago 
-                    if comment.link_author != username: # commented on someone else's submission
-                        other_comments.append(comment) # other_comments list
-
-                    if comment.created_utc < old_time_limit: # comment was 30<=days<120 ago
-                        old_comments.append(comment) # list of comments from 30-120 days ago
-                        if comment.link_author != username:
-                            old_other_comments.append(comment) # old_other_comments list
-                    else: # comments less than 30 days ago
-                        pass # don't remove comment from comments
+                        if comment.created_utc < old_time_limit: # comment was 30<=days<120 ago
+                            old_comments.append(comment) # list of comments from 30-120 days ago
+                            if comment.link_author != username:
+                                old_other_comments.append(comment) # old_other_comments list
+                        else: # comments less than 30 days ago
+                            pass # don't remove comment from comments
+                    else:
+                        comments.remove(comment) # remove comments from more than 120 days ago
                 else:
-                    comments.remove(comment) # remove comments from more than 120 days ago
-            else:
-                comments.remove(comment) # don't care about comments in other subreddits
-        except AttributeError:
-            # will except e.g. if parent submission is deleted
-            # must have been in /r/asmr and later than 120 days ago
-            # so assume it's ok and leave it in the comments list
-            pass
-    for submission in list(submissions): # copy list for iteration
-        if submission.subreddit.display_name == subreddit.display_name: # if submission in /r/asmr
-            if submission.created_utc > time_limit: # and was <120 days ago 
+                    comments.remove(comment) # don't care about comments in other subreddits
+            except AttributeError:
+                # will except e.g. if parent submission is deleted
+                # must have been in /r/asmr and later than 120 days ago
+                # so assume it's ok and leave it in the comments list
+                pass
+        for submission in list(submissions): # copy list for iteration
+            if submission.subreddit.display_name == subreddit.display_name: # if submission in /r/asmr
+                if submission.created_utc > time_limit: # and was <120 days ago 
 
-                vid_id = get_vid_id(submission.url)
-                if vid_id != -1: # if submission links to youtube. Otherwise it's a text submission or other external link
-                    youtube_author = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelTitle")
+                    vid_id = get_vid_id(submission.url)
+                    if vid_id != -1: # if submission links to youtube. Otherwise it's a text submission or other external link
+                        youtube_author = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelTitle")
 
-                    if youtube_author != channel_name: # submission of someone else's video
-                        other_submissions.append(submission) # create other_submissions list
+                        if youtube_author != channel_name: # submission of someone else's video
+                            other_submissions.append(submission) # create other_submissions list
 
-                    if submission.created_utc < old_time_limit: # submission was 30<=days<120 ago
-                        old_submissions.append(submission) # create a list of submissions from 30-120 days ago
-                        if youtube_author != channel_name:
-                            old_other_submissions.append(submission) #create old_other_submissions list
-                    else: # submissions less than 30 days ago
-                        pass # don't remove submission from submissions
+                        if submission.created_utc < old_time_limit: # submission was 30<=days<120 ago
+                            old_submissions.append(submission) # create a list of submissions from 30-120 days ago
+                            if youtube_author != channel_name:
+                                old_other_submissions.append(submission) #create old_other_submissions list
+                        else: # submissions less than 30 days ago
+                            pass # don't remove submission from submissions
+                    else:
+                        other_submissions.append(submission)
+
+                        if submission.created_utc < old_time_limit: 
+                            old_other_submissions.append(submission)
                 else:
-                    other_submissions.append(submission)
-
-                    if submission.created_utc < old_time_limit: 
-                        old_other_submissions.append(submission)
+                    submissions.remove(submission) # remove submissions from more than 120 days ago
             else:
-                submissions.remove(submission) # remove submissions from more than 120 days ago
+                submissions.remove(submission) #don't care about submissions in other subreddits
+
+        # comments now contains all comments by user in /r/asmr after 90 days ago
+        # old_comments is a subset of comments in /r/asmr containing comments from before 30 days ago
+        # ditto for submissions
+
+        if  (      len(comments) < 8 # at least 2 overall comments per month
+                or len(old_comments) < 6  # at least 2 historical comments per month
+                or len(submissions) < 4 # at least 1 submission per month
+                or len(old_submissions) < 3 # at least 1 historical submissions per month
+            ):#    or len(other_comments) < 4 # at least 1 communal comment per month overall
+              #  or len(old_other_comments) < 3 # at least 1 historical communal comment per month (on someone else's submission)
+              #  or len(other_submissions) < 2 # at least 2 overall communal submissions
+              #  or len(old_other_submissions) < 1 # at least 1 historical communal submissions
+           # ): #sad
+                return False
         else:
-            submissions.remove(submission) #don't care about submissions in other subreddits
-
-    # comments now contains all comments by user in /r/asmr after 90 days ago
-    # old_comments is a subset of comments in /r/asmr containing comments from before 30 days ago
-    # ditto for submissions
-
-    if  (      len(comments) < 8 # at least 2 overall comments per month
-            or len(old_comments) < 6  # at least 2 historical comments per month
-            or len(submissions) < 4 # at least 1 submission per month
-            or len(old_submissions) < 3 # at least 1 historical submissions per month
-        ):#    or len(other_comments) < 4 # at least 1 communal comment per month overall
-          #  or len(old_other_comments) < 3 # at least 1 historical communal comment per month (on someone else's submission)
-          #  or len(other_submissions) < 2 # at least 2 overall communal submissions
-          #  or len(old_other_submissions) < 1 # at least 1 historical communal submissions
-       # ): #sad
-            return False
-    else:
-        return True
+            return True
 
 def user_is_shadowbanned(username):
     try:
@@ -704,31 +721,32 @@ def add_warning(post): # post is a reddit 'thing' (comment or submission) for wh
     warnings_cursor.execute("SELECT * FROM warnings WHERE name=?", [user])
     result = warnings_cursor.fetchone()
     
+    note = "Auto-ban: {ordinal} - " + post.short_link
+
     if not result:
+        ordinal = "First warning"
         post.remove(False)
         warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)", [user, 1])
         note = "Auto-ban: first warning - " + post.permalink
-        msg = "You have received an automatic warning ban because of your post [here](" + post.permalink + "). This is your first warning, which is accompanied by a 7-day ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again."
-        subreddit.add_ban(post.author, duration=7, note=note, ban_message=msg)
-        ordinal = "First"
-    elif result[1] >= 2: 
+        msg = "You have received an automatic warning ban because of your post [here](" + post.permalink + "). This is your first warning, which is accompanied by a 7-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again. If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early."
+        subreddit.add_ban(post.author, duration=7, note=note.format(ordinal=ordinal), ban_message=msg)
+    elif result[1] >= 2:
+        ordinal = "Permanent"
         post.remove(False)
         warnings_cursor.execute("DELETE FROM warnings WHERE name=?", [user])
         warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)",  [user, 3])
-        note = "Auto-ban: Permanent - " + post.permalink
         msg = "You have been automatically banned because of your post [here](" + post.permalink + "). This is your third warning, meaning you are now permanently banned."
-        subreddit.add_ban(post.author, note=note, ban_message=msg)
-        ordinal = "Third"
+        subreddit.add_ban(post.author, note=note.format(ordinal=ordinal), ban_message=msg)
     elif result[1] == 1:
+        ordinal = "Second warning"
         post.remove(False)
         warnings_cursor.execute("DELETE FROM warnings WHERE name=?", [user])
         warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)",  [user, 2])
         note = "Auto-ban: Final warning - " + post.permalink
         msg = "You have received an automatic warning ban because of your post [here](" + post.permalink + "). **This is your final warning**. You will be banned for the next 30 days; if you receive another warning, you will be permanently banned. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again."
-        subreddit.add_ban(post.author, duration=30, note=note, ban_message=msg)
-        ordinal = "Second"
+        subreddit.add_ban(post.author, duration=30, note=note.format(ordinal=ordinal), ban_message=msg)
     warnings_db.commit()
-    print(ordinal + " warning added for " + user)
+    print(ordinal + " ban added for " + user)
 
 def is_bad_title(title):
     title = title.lower()
@@ -738,9 +756,9 @@ def is_bad_title(title):
                 return True
     return False
 
-def is_banned_link(url): 
-    if (    (".youtube." in url 
-             or "youtu.be" in url
+def is_banned_link(url):
+    if (    (   ".youtube." in url 
+             or "youtu.be"  in url
             )
         and ("playlist" in url
              or "list=" in url 
@@ -816,10 +834,9 @@ def clear_user_submissions():
     # every submission they've made in the last 24 hours
 
     submissions = user_submission_data["submissions"]
-    users = list(submissions.keys())
 
-    for user in users:
-        if user == "un" and len(users) > 2:
+    for user in list(submissions.keys()):
+        if user == "un" and len(users) > 2: #if database is reset, dummy data is inserted as a placeholder. Remove this.
             del submissions["un"]
             continue
         submissions_by_user = submissions[user] 
@@ -909,6 +926,7 @@ if __name__ == "__main__":
         except praw.errors.HTTPException as e:
             try:
                 print("HTTP Exception: " + str(e))
+                traceback.print_exc()
                 r = login()
             except Exception as f:
                 print("Login failed: " + str(f))
