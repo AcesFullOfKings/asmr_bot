@@ -261,13 +261,13 @@ def check_comments():
                                 parent = get_comment_from_submission(parent)
                                 purge_thread(parent)
                             else:
-                                r.send_message(comment_author, "Failed command", "The !bot-purge command can only be used in reply to a comment. This is due to reddit API restrictions.") #todo: wat
+                                r.send_message(recipient=comment_author, subject="Failed command", message="The !bot-purge command can only be used in reply to a comment. This is due to reddit API restrictions.") #todo: wat
                             
                             remove_mod_comment(comment)
                         except Exception as e:
                             print("Exception when purging comment tree - "+str(e)+"\nParent was " + parent.id)
                             #traceback.print_exc()
-                            r.send_message(comment_author, "Failed command", "Your purge command failed for an unknown reason. Your comment was removed.")
+                            r.send_message(recipient=comment_author, subject="Failed command", message="Your purge command failed for an unknown reason. Your comment was removed.")
                         finally:
                             comment.remove(False)
                     elif "!ban" == comment_body[:4]:
@@ -287,7 +287,7 @@ def check_comments():
 
                         message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\>{reason} \n\n Ban list: /r/asmr/about/banned"
 
-                        r.send_message(comment_author, "Ban successful", message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
+                        r.send_message(recipient=comment_author, subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
 
             except AttributeError as ex: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
                 print("Attribute Error! Comment was probably deleted. Comment was " + str(comment.fullname))
@@ -328,7 +328,7 @@ def check_submissions():
             elif is_bad_title(submission.title):
                 submission.remove(False)
                 submission.add_comment(auto_title_explain).distinguish(sticky=True)
-                r.send_message("theonefoster", "Bad Title - Submission removed", submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
+                r.send_message(recipient="theonefoster", subject="Bad Title - Submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
                 print("Removed submission " + submission.id + " for having a bad title.")
             elif ("youtube" in submission.url or "youtu.be" in submission.url):
                 try:
@@ -380,9 +380,9 @@ def check_submissions():
                                 my_sub.channel_ID = channel_id
                                 my_sub.date_created = submission.created_utc
 
-                                if is_roleplay(submission.title, vid_id):
-                                    r.send_message(recipient=submission.author.name, subject="Role Play " + submission.id, message="Hey! It looks like you've submitted a roleplay-type video on /r/asmr. We're trialling tagging these sorts of submissions as **[roleplay]** to help users find submisisons that they'll enjoy. If you think your submission is a roleplay, please reply to this message with \"yes\" without altering the subject to re-flair your submission automatically. This will help categorise your submission for users looking for particular video types.\n\n Thanks!")
-                                    print("Advising " + str(submission.author.name) + " of Roleplay flair via PM..")
+                                if "[intentional]" in submission.title.lower() and is_roleplay(submission.title, vid_id):
+                                    submission.set_flair("ROLEPLAY", "roleplay")
+                                    print("Reflaired submission " + submission.id + " as roleplay.")
                                     
                                 recent_videos_copy = recent_video_data["videos"]
                                 recent_videos_copy[vid_id] = my_sub # add submission info to temporary dict
@@ -434,7 +434,6 @@ def check_submissions():
                     
                     if "ran out of input" in str(ex).lower():
                         break
-                    
 
 def check_messages():
     messages = list(r.get_unread()) 
@@ -448,24 +447,6 @@ def check_messages():
                 print("Recommending popular video")
                 message_to_send = recommend_top_submission()
                 message.reply(message_to_send)
-            elif "Role Play " in message.subject:
-                try:
-                    id = message.subject[-6:]
-                    submission = r.get_info(thing_id = "t3_" + id)
-                    if message.author.name == submission.author.name:
-                        if submission.link_flair_text != "ROLEPLAY": #flair if needed and message is from OP
-                            print("Assigning roleplay flair..")
-                            submission.set_flair("ROLEPLAY", "roleplay")
-                            message.reply("Thanks! I've updated your submission's flair for you :)")
-                        else: #if message from OP and no flair needed
-                            if any(thank in message.body.lower() for thank in ["thanks", "thankyou", "thank you", "thx", "cheers"]):
-                                message.reply("You're welcome, human.")
-                            else:
-                                pass # ignore further messages
-                    else: #message not from OP
-                        message.reply("Command failed - you can't edit flair on other people's submissions.")
-                except: # if it fails, oh well
-                    message.reply("Command failed for unknown reason. Please [contact mods on modmail](https://www.reddit.com/message/compose?to=%2Fr%2Fasmr)")
             elif(message.subject == "flair request" or message.subject == "re: flair request"): # set flair
                 
                 global flair_errors
