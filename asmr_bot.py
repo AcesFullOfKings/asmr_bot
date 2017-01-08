@@ -35,7 +35,7 @@ bad_title_phrases = d.bad_title_phrases
 g_browser_key = d.g_browser_key
 
 # global variables
-mod_list = {'theonefoster', 'nvadergir', 'zimm3rmann', 'youngnreckless', 'mahi-mahi', 'asmr_bot', 'sidecarfour', 'harrietpotter'}
+mod_list = {'theonefoster', 'nvadergir', 'mahi-mahi', 'asmr_bot', 'underscorewarrior'}
 viewed_mod_queue = set()
 modqueue_is_full = True #if bot is restarted it will wait for empty modqueue before full queue notifications begin
 unactioned_modqueue = queue.Queue(0)
@@ -176,8 +176,8 @@ def check_mod_queue():
 
             if user_is_shadowbanned(item.author.name):
                 print("Replying to shadowbanned user " + item.author.name)
-            
-            if item.fullname.startswith("t3"):  # submission
+             
+                if item.fullname.startswith("t3"):  # submission
                     item.remove(False)
                     item.add_comment(sb_explain).distinguish(sticky=True)
                 elif item.fullname.startswith("t1"): # comment
@@ -227,33 +227,33 @@ def check_comments():
                     continue
 
                 if (comment_author in mod_list):
-                    if ('!bot-meta' in comment_body):
+                    if ('!meta' in comment_body):
                         print("Comment found! Removing submission in response to " + comment_author + " (bad meta post)")
                         remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
                         submission.add_comment(meta_explain).distinguish(sticky=True)
-                    elif ('!bot-mus' in comment_body):
+                    elif ('!music' in comment_body):
                         print("Comment found! Removing submission in response to " + comment_author + " (music)")
                         remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
                         submission.add_comment(mus_explain).distinguish(sticky=True)
-                    elif ('!bot-title' in comment_body):
+                    elif ('!title' in comment_body):
                         print("Comment found! Removing submission in response to " + comment_author + " (bad title)")
                         remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
                         submission.add_comment(mod_title_explain).distinguish(sticky=True)
-                    elif ("!bot-warning" in comment_body):
+                    elif ("!warning" in comment_body):
                         print("Comment found! Removing post in response to " + comment_author + " (add warning)")
                         remove_mod_comment(comment)
                         parent = r.get_info(thing_id=comment.parent_id)
                         add_warning(parent)
-                    elif("!bot-purge" in comment_body):
+                    elif("!purge" in comment_body):
                         print("Comment found! Removing comment tree in response to " + comment_author + " (kill thread)")
                         try:
                             parent = r.get_info(thing_id=comment.parent_id)
@@ -261,7 +261,7 @@ def check_comments():
                                 parent = get_comment_from_submission(parent)
                                 purge_thread(parent)
                             else:
-                                r.send_message(recipient=comment_author, subject="Failed command", message="The !bot-purge command can only be used in reply to a comment. This is due to reddit API restrictions.") #todo: wat
+                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. This is due to reddit API restrictions.") #todo: wat
                             
                             remove_mod_comment(comment)
                         except Exception as e:
