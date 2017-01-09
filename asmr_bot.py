@@ -280,18 +280,19 @@ def check_comments():
                         reason = comment_body[5:]
                         if reason == "":
                             reason = "<No reason given>"
+
                         parent = r.get_info(thing_id=comment.parent_id)
                         ban_user = parent.author.name
-                        msg = "You have been automatically banned for [your post here]({link})."
+                        msg = "You have been automatically banned for [your post here]({link}). The moderator who banned you provided the following reason: **{reason}**"
 
                         print("Banning user {ban_user} for post {post}: {reason}".format(ban_user=ban_user, post=parent.id, reason=reason))
                         parent.remove(False)
                         remove_mod_comment(comment)
                         
                         note = comment.author.name + ": " + reason
-                        subreddit.add_ban(ban_user, note=note, ban_message=msg.format(link=parent.permalink))
+                        subreddit.add_ban(ban_user, note=note, ban_message=msg.format(link=parent.permalink, reason=reason))
 
-                        message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\>{reason} \n\n Ban list: /r/asmr/about/banned"
+                        message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\> {reason} \n\n Ban list: /r/asmr/about/banned"
 
                         r.send_message(recipient=comment_author, subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
 
