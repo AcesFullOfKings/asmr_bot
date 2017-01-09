@@ -55,7 +55,7 @@ unlisted_explain = d.UNLISTED_COMMENT
 spam_explain = d.SPAM_COMMENT
 repost_explain = d.REPOST_COMMENT
 channel_or_playlist_explain = d.CHANNEL_PLAYLIST_EXPLAIN
-flair_errors = d.flair_errors
+replies = d.messages
 comment_reply = d.comment_reply
 del(d)
 
@@ -157,7 +157,7 @@ def check_mod_queue():
     global unactioned_modqueue
     global seen_objects
     global user_submission_data
-    global recent_video_data
+    global recent_video_data #shouldn't really need these but seems not to work on linux without them
 
     modqueue = list(r.get_mod_queue(subreddit=subreddit.display_name))
 
@@ -204,7 +204,7 @@ def check_comments():
     global first_run
     global seen_objects
     global user_submission_data
-    global recent_video_data
+    global recent_video_data #shouldn't really need these but seems not to work on linux without them
 
     limit = 100 if first_run else 6
 
@@ -263,11 +263,11 @@ def check_comments():
                         print("Removing comment tree in response to " + comment_author + " (kill thread)")
                         try:
                             parent = r.get_info(thing_id=comment.parent_id)
-                            if parent.fullname.startswith("t1"):# TODO - this isn't necessary I think
-                                parent = get_comment_from_submission(parent)
+                            if parent.fullname.startswith("t1"):# comment
+                                parent.refresh()
                                 purge_thread(parent)
                             else:
-                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. This is due to reddit API restrictions.") #todo: wat
+                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") #todo: wat
                             
                             remove_mod_comment(comment)
                         except Exception as e:
@@ -314,7 +314,7 @@ def check_submissions():
     global first_run
     global recent_video_data
     global user_submission_data
-    global seen_objects
+    global seen_objects #shouldn't really need these but seems not to work on linux without them
 
     limit = 50 if first_run else 8
 
@@ -456,7 +456,7 @@ def check_messages():
                 message.reply(message_to_send)
             elif(message.subject == "flair request" or message.subject == "re: flair request"): # set flair
                 
-                global flair_errors
+                global replies
 
                 using_id = False
                 channel_name = message.body
@@ -500,34 +500,34 @@ def check_messages():
                                             lounge.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
                                             print("Verified and set flair for " + user)
                                         except:
-                                            message.reply(flair_errors.unknown_error)
+                                            message.reply(replies.unknown_error)
                                             r.send_message(recipient="theonefoster", subject="Failed flair assignment", message="/u/" + user + " passed flair eligibility but flair assignment failed. Please ensure their flair is set correctly on /r/asmr and /r/asmrCreatorLounge, and that they are an approved submitter on both subreddits. \n\nChannel was: " + channel_name)
                                     else:
-                                        message.reply(flair_errors.no_verification)
+                                        message.reply(replies.no_verification)
                                         print("flair verification for " + channel_name + " failed - no verification message.")
                                 else:
-                                    message.reply(flair_errors.inactive)
+                                    message.reply(replies.inactive)
                                     print("flair verification for " + channel_name + " failed - not enough subreddit activity.")
                             else:
-                                message.reply(flair_errors.not_enough_videos.format(vid_count = str(video_count)))
+                                message.reply(replies.not_enough_videos.format(vid_count = str(video_count)))
                                 print("flair verification for " + channel_name + " failed - not enough published videos.")
                         else:
-                            message.reply(flair_errors.underage)
+                            message.reply(replies.underage)
                             print("flair verification for " + channel_name + " failed - channel too new.")
                     else:
-                        message.reply(flair_errors.not_enough_subs.format(current_subs=str(subs)))
+                        message.reply(replies.not_enough_subs.format(current_subs=str(subs)))
                         print("flair verification for " + channel_name + " failed - not enough subs.")
                 else:
-                    message.reply(flair_errors.channel_not_found)
+                    message.reply(replies.channel_not_found)
                     print("flair verification failed - channel not found. Message was: " + message.body)
             elif(message.subject == "delete flair"): # delete flair
                 if message.body == "delete flair":
                     r.delete_flair(subreddit="asmr", user=user)
-                    message.reply(flair_errors.flair_deleted)
+                    message.reply(replies.flair_deleted)
                     print("Flair deleted for " + user)
             elif("post reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
                 print("Command not recognised. Message was " + message.body)
-                message.reply(flair_errors.command_not_recognised)
+                message.reply(replies.command_not_recognised)
         else:
             print("Replying to comment in messages..")
             message.reply(comment_reply).distinguish()
@@ -790,14 +790,6 @@ def purge_thread(comment): # recursion is cool
         purge_thread(c)
     comment.remove(False)
 
-def get_comment_from_submission(comment):
-    s = comment.submission
-    i = comment.id
-    for c in s.comments:
-        if c.id == i:
-            return c # Yes, this is completely dumb. No, there's no other way to do it.
-    return None      # Yes, the reddit api is weird sometimes. Just don't worry about it too much.
-
 def remove_tech_tuesday():
     sticky = subreddit.get_sticky()
     try:
@@ -883,11 +875,11 @@ def login():
     return r
 
 def asmr_bot():
-    #schedule.run_pending()
-    #check_submissions()
+    schedule.run_pending()
+    check_submissions()
     check_comments()
-    #check_messages()
-    #check_mod_queue()
+    check_messages()
+    check_mod_queue()
 
 # ----------------------------
 # END OF FUNCTIONS
