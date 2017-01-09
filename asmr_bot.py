@@ -228,33 +228,39 @@ def check_comments():
 
                 if (comment_author in mod_list):
                     if ('!meta' in comment_body):
-                        print("Comment found! Removing submission in response to " + comment_author + " (bad meta post)")
+                        print("Removing submission in response to " + comment_author + " (bad meta post)")
                         remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
                         submission.add_comment(meta_explain).distinguish(sticky=True)
                     elif ('!music' in comment_body):
-                        print("Comment found! Removing submission in response to " + comment_author + " (music)")
+                        print("Removing submission in response to " + comment_author + " (music)")
                         remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
                         submission.add_comment(mus_explain).distinguish(sticky=True)
                     elif ('!title' in comment_body):
-                        print("Comment found! Removing submission in response to " + comment_author + " (bad title)")
+                        print("Removing submission in response to " + comment_author + " (bad title)")
                         remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
                         submission.add_comment(mod_title_explain).distinguish(sticky=True)
                     elif ("!warning" in comment_body):
-                        print("Comment found! Removing post in response to " + comment_author + " (add warning)")
+                        reason = comment_body[9:]
+                        print("Removing post in response to " + comment_author + " (add warning)")
                         remove_mod_comment(comment)
                         parent = r.get_info(thing_id=comment.parent_id)
-                        add_warning(parent)
+                        add_warning(parent, reason)
+                    elif ("!remove" in comment_body):
+                        print("Removing post in response to " + comment_author + " (Vanilla Remove)")
+                        remove_mod_comment(comment)
+                        parent = r.get_info(thing_id=comment.parent_id)
+                        parent.remove(False)
                     elif("!purge" in comment_body):
-                        print("Comment found! Removing comment tree in response to " + comment_author + " (kill thread)")
+                        print("Removing comment tree in response to " + comment_author + " (kill thread)")
                         try:
                             parent = r.get_info(thing_id=comment.parent_id)
                             if parent.fullname.startswith("t1"):# TODO - this isn't necessary I think
@@ -444,7 +450,7 @@ def check_messages():
             print("Message dectected from " + user)
 
             if ("!recommend" in message.body.lower() or "!recommend" in message.subject.lower()): # recommendation
-                print("Recommending popular video")
+                print("Recommending popular video to " + message.author.name)
                 message_to_send = recommend_top_submission()
                 message.reply(message_to_send)
             elif(message.subject == "flair request" or message.subject == "re: flair request"): # set flair
@@ -695,39 +701,45 @@ def submission_is_deleted(id):
     except praw.errors.InvalidSubmission:
         return True
 
-def add_warning(post): # post is a reddit 'thing' (comment or submission) for which the author is receiving a warning
+def add_warning(post, reason=""): # post is a reddit 'thing' (comment or submission) for which the author is receiving a warning
+    pure_reason = reason
+    
+    if "t3" in post.fullname[:2]: #submission
+        note = reason + " - " + post.short_link + " - {ordinal}"
+    else: #comment
+        note = reason + " - " + post.permalink  + " - {ordinal}"
+    
+    if reason != "":
+        reason = "\n\n**The moderator who invoked this ban gave the following reason: \"" + reason + "\".** "
+
     user = post.author.name
     ordinal = "?"
 
     warnings_cursor.execute("SELECT * FROM warnings WHERE name=?", [user])
     result = warnings_cursor.fetchone()
     
-    note = "Auto-ban: {ordinal} - " + post.short_link
-
     if not result:
         ordinal = "First warning"
         post.remove(False)
         warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)", [user, 1])
-        note = "Auto-ban: first warning - " + post.permalink
-        msg = "You have received an automatic warning ban because of your post [here](" + post.permalink + "). This is your first warning, which is accompanied by a 7-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again. If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early."
+        msg = "You have received an automatic warning ban because of your post [here]({link}). {reason}\n\nThis is your first warning, which is accompanied by a 7-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again. If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early.".format(link=post.permalink, reason=reason)
         subreddit.add_ban(post.author, duration=7, note=note.format(ordinal=ordinal), ban_message=msg)
     elif result[1] >= 2:
         ordinal = "Permanent"
         post.remove(False)
         warnings_cursor.execute("DELETE FROM warnings WHERE name=?", [user])
         warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)",  [user, 3])
-        msg = "You have been automatically banned because of your post [here](" + post.permalink + "). This is your third warning, meaning you are now permanently banned."
+        msg = "You have been automatically banned because of your post [here]({link}). {reason}\n\nThis is your third warning, meaning you are now permanently banned.".format(link=post.permalink, reason=reason)
         subreddit.add_ban(post.author, note=note.format(ordinal=ordinal), ban_message=msg)
     elif result[1] == 1:
         ordinal = "Second warning"
         post.remove(False)
         warnings_cursor.execute("DELETE FROM warnings WHERE name=?", [user])
         warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)",  [user, 2])
-        note = "Auto-ban: Final warning - " + post.permalink
-        msg = "You have received an automatic warning ban because of your post [here](" + post.permalink + "). **This is your final warning**. You will be banned for the next 30 days; if you receive another warning, you will be permanently banned. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again."
+        msg = "You have received an automatic warning ban because of your post [here]({link}). {reason}\n\n**This is your final warning**. You will be banned for the next 30 days; if you receive another warning, you will be permanently banned. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again.".format(link=post.permalink, reason=reason)
         subreddit.add_ban(post.author, duration=30, note=note.format(ordinal=ordinal), ban_message=msg)
     warnings_db.commit()
-    print(ordinal + " ban added for " + user)
+    print(ordinal + " ban added for " + user + ". Reason: " + pure_reason)
 
 def is_bad_title(title):
     title = title.lower()
@@ -870,11 +882,11 @@ def login():
     return r
 
 def asmr_bot():
-    schedule.run_pending()
-    check_submissions()
+    #schedule.run_pending()
+    #check_submissions()
     check_comments()
-    check_messages()
-    check_mod_queue()
+    #check_messages()
+    #check_mod_queue()
 
 # ----------------------------
 # END OF FUNCTIONS
@@ -939,4 +951,4 @@ if __name__ == "__main__":
 
             first_run = False
 
-            time.sleep(8) # reduces reddit load and unnecessary processor usage
+            time.sleep(5) # reduces reddit load and unnecessary processor usage
