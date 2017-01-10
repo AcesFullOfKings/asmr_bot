@@ -459,7 +459,7 @@ def check_messages():
                 global replies
 
                 using_id = False
-                channel_name = message.body
+                channel_name = message.body.replace(" ", "").replace(".", "")
                 description = get_youtube_video_data("channels", "snippet", "forUsername", channel_name, "description")
                 
                 if description == -1:
@@ -539,12 +539,11 @@ def title_has_two_tags(title):
     two_tags = (re.search(two_tags_regex, title) is not None) # search the title for two tags; if two are found set true, else set false
 
     if two_tags:
-        if "[intentional]" in title:
-            if "[roleplay]" in title or "[role play]" in title:
-                return False #if the two tags are [intentional] and [roleplay] then allow it
+        if "[intentional]" in title and ("[roleplay]" in title or "[role play]" in title):
+            return False #if the two tags are [intentional] and [roleplay] then allow it
         return True # two tags in title but not intentional and roleplay
     else:
-        return False
+        return True
 
 def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
     toplist = shelve.open("topPosts","c")
