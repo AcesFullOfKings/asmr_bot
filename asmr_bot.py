@@ -16,6 +16,12 @@ import schedule
 import asmr_bot_data as d # d for data
 import theonefoster_bot # used to delete subreddit reply commands
 
+
+
+"TODO: timestamped youtube links are not being recognised as unique from the untimestamped link"
+
+
+
 class my_submission_type():
     sub_permalink = ""
     sub_ID = ""
@@ -29,7 +35,7 @@ app_secret = d.app_secret
 app_URI = d.app_URI
 app_refresh_token = d.app_refresh_token
 bad_title_phrases = d.bad_title_phrases
-#banned_channels = d.BANNED_CHANNELS
+# banned_channels = d.BANNED_CHANNELS
 
 # gdata details
 g_browser_key = d.g_browser_key
@@ -37,9 +43,9 @@ g_browser_key = d.g_browser_key
 # global variables
 mod_list = {'theonefoster', 'nvadergir', 'mahi-mahi', 'asmr_bot', 'underscorewarrior'}
 viewed_mod_queue = set()
-modqueue_is_full = True #if bot is restarted it will wait for empty modqueue before full queue notifications begin
+modqueue_is_full = True # if bot is restarted it will wait for empty modqueue before full queue notifications begin
 unactioned_modqueue = queue.Queue(0)
-first_run = True #does a lot more processing on first run to catch up with anything missed during downtime
+first_run = True # does a lot more processing on first run to catch up with anything missed during downtime
 banned_channels = set()
 
 # Messages
@@ -57,6 +63,7 @@ repost_explain = d.REPOST_COMMENT
 channel_or_playlist_explain = d.CHANNEL_PLAYLIST_EXPLAIN
 replies = d.messages
 comment_reply = d.comment_reply
+taggable_channels = d.linkable_channels
 del(d)
 
 vid_id_regex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
@@ -73,7 +80,7 @@ if "videos" not in recent_video_data: # initialise dict
     fake.date_created = time.time()
     recent_video_data["videos"] = {"id": fake} # empty dict can cause problems. enter test data and remove later.
 
-if "submissions" not in user_submission_data: #initialise dict
+if "submissions" not in user_submission_data: # initialise dict
     fake = my_submission_type()
     fake.date_created = time.time()
     user_submission_data["submissions"] = {"un": [fake]} # empty dict can cause problems. enter test data and remove later.
@@ -113,7 +120,7 @@ def get_youtube_video_data(location, part, input_type, input_val, return_val):
         rtn = snippet[return_val]
         return rtn
     except Exception as e:
-        #traceback.print_exc()
+        # traceback.print_exc()
         return -1
 
 def days_since_youtube_channel_creation(**kwargs):
@@ -157,7 +164,7 @@ def check_mod_queue():
     global unactioned_modqueue
     global seen_objects
     global user_submission_data
-    global recent_video_data #shouldn't really need these but seems not to work on linux without them
+    global recent_video_data # shouldn't really need these but seems not to work on linux without them
 
     modqueue = list(r.get_mod_queue(subreddit=subreddit.display_name))
 
@@ -204,7 +211,7 @@ def check_comments():
     global first_run
     global seen_objects
     global user_submission_data
-    global recent_video_data #shouldn't really need these but seems not to work on linux without them
+    global recent_video_data # shouldn't really need these but seems not to work on linux without them
 
     limit = 100 if first_run else 6
 
@@ -221,11 +228,24 @@ def check_comments():
                 comment_author = comment.author.name.lower()
                 comment_body = comment.body.lower()
 
+                # public commands:
                 if any(comment_body == x for x in ["ayy", "ayyy", "ayyyy", "ayyyyy"]):
                     print("Responding to ayy by /u/" + comment_author)
                     comment.reply("lmao").distinguish()
                     continue
 
+                if comment_author != "asmr_bot":
+                    reply = link_youtube_channel(comment_body)
+
+                    # Reply will be the proposed reply to the comment
+                    # if no reply is needed it will be empty
+                    # so "if reply" will evaluate to False
+                    if reply:
+                        print("Replying to tagged channel..")
+                        comment.reply(reply).distinguish()
+                        continue # don't carry out further checks
+                    
+                # moderator commands
                 if (comment_author in mod_list):
                     if ('!meta' in comment_body):
                         print("Removing submission in response to " + comment_author + " (bad meta post)")
@@ -267,12 +287,12 @@ def check_comments():
                                 parent.refresh()
                                 purge_thread(parent)
                             else:
-                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") #todo: wat
+                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") # todo: wat
                             
                             remove_mod_comment(comment)
                         except Exception as e:
                             print("Exception when purging comment tree - "+str(e)+"\nParent was " + parent.id)
-                            #traceback.print_exc()
+                            # traceback.print_exc()
                             r.send_message(recipient=comment_author, subject="Failed command", message="Your purge command failed for an unknown reason. Your comment was removed.")
                         finally:
                             comment.remove(False)
@@ -299,7 +319,7 @@ def check_comments():
             except AttributeError as ex: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
                 print("Attribute Error! Comment was probably deleted. Comment was " + str(comment.fullname))
                 print(str(ex))
-                #traceback.print_exc()
+                # traceback.print_exc()
 
 def remove_mod_comment(comment):
     """If comment was made by me, I have the authentication to delete it, which is preferred. Otherwise Remove it since I can't delete other mods' comments
@@ -314,7 +334,7 @@ def check_submissions():
     global first_run
     global recent_video_data
     global user_submission_data
-    global seen_objects #shouldn't really need these but seems not to work on linux without them
+    global seen_objects # shouldn't really need these but seems not to work on linux without them
 
     limit = 50 if first_run else 8
 
@@ -362,25 +382,25 @@ def check_submissions():
                                 submission.add_comment(unlisted_explain).distinguish(sticky=True)
                                 print("Removing submission " + submission.short_link + " (unlisted video)..")
                                 removed = True
-                            elif vid_id in recent_video_data["videos"]: #submission is repost
+                            elif vid_id in recent_video_data["videos"]: # submission is repost
                                 my_old_post = recent_video_data["videos"][vid_id]
                                 try:
                                     old_post = r.get_info(thing_id="t3_" + my_old_post.sub_ID)
-                                    if old_post is None or old_post.author is None or old_post.banned_by is not None: #if old post isn't live, i.e. is removed or deleted
+                                    if old_post is None or old_post.author is None or old_post.banned_by is not None: # if old post isn't live, i.e. is removed or deleted
                                         remove_post = False # allow repost since old one is gone
                                     else: 
                                         remove_post = True # repost will be removed
                                 except:
                                     remove_post = True # assume repost isn't allowed by default; will be removed
 
-                                if remove_post: #flag to show if it should be removed
+                                if remove_post: # flag to show if it should be removed
                                     submission.remove(False)
                                     comment = repost_explain.format(old_link=old_post.permalink)
                                     submission.add_comment(comment).distinguish(sticky=True)
                                     removed = True
                                     print("Removing submission " + submission.id + " (reposted video)..")
 
-                            if not removed: #successful submission (youtube links only)
+                            if not removed: # successful submission (youtube links only)
                                 my_sub = my_submission_type()
                                 my_sub.sub_permalink = submission.permalink
                                 my_sub.sub_ID = submission.id
@@ -406,13 +426,13 @@ def check_submissions():
                                     count = 1 # there's already one in submission, don't forget to count that!
                                 
                                     for _submission in user_submission_list:
-                                        live_submission = r.get_info(thing_id="t3_" + _submission.sub_ID) #update object (might have been removed etc)
+                                        live_submission = r.get_info(thing_id="t3_" + _submission.sub_ID) # update object (might have been removed etc)
 
-                                        if (not submission_is_deleted(live_submission.id)) and live_submission.banned_by is None: #if submission isn't deleted or removed
+                                        if (not submission_is_deleted(live_submission.id)) and live_submission.banned_by is None: # if submission isn't deleted or removed
                                             if _submission.channel_ID == channel_id:
                                                 count += 1
 
-                                    if count >= 3: #3 or more submissions to same channel in past day
+                                    if count >= 3: # 3 or more submissions to same channel in past day
                                         submission.remove(False)
                                         submission.add_comment(spam_explain).distinguish(sticky=True)
                                         print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
@@ -424,18 +444,18 @@ def check_submissions():
                                             sub_to_remove = r.get_info(thing_id="t3_" + s.sub_ID)
                                             sub_to_remove.remove(False)
 
-                                        user_submission_data["submissions"][submission.author.name] = [] #clear the list (user is banned anyway)
+                                        user_submission_data["submissions"][submission.author.name] = [] # clear the list (user is banned anyway)
 
                                         note = "too many links to same youtube channel - 1-day ban"
                                         msg = "Warning ban for spamming links to a youtube channel"
                                         subreddit.add_ban(submission.author, duration=1, note=note, ban_message=msg)
                                         r.send_message("/r/" + subreddit.display_name, "Ban Notification", "I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **1 day only**. \n\nLinks to the offending submissions:\n\n" + submission_links)
                                     else:
-                                        subs = user_submission_data["submissions"]  #copy dict
+                                        subs = user_submission_data["submissions"]  # copy dict
                                         l = subs[submission.author.name] # get list of user submissions
-                                        l.append(my_sub) #append submission to list
+                                        l.append(my_sub) # append submission to list
                                         subs[submission.author.name] = l # update dict value
-                                        user_submission_data["submissions"] = subs #write dict back to shelve 
+                                        user_submission_data["submissions"] = subs # write dict back to shelve 
                 except Exception as ex:
                     print("exception on removal of submission " + submission.short_link + " - " + str(ex))
                     
@@ -540,11 +560,49 @@ def title_has_two_tags(title):
 
     if two_tags:
         if "[intentional]" in title and ("[roleplay]" in title or "[role play]" in title):
-            return False #if the two tags are [intentional] and [roleplay] then allow it
+            title = title.replace("[intentional]", "").replace("[roleplay]", "").replace("[role play]", "")
+            
+            if any(f in title for f in ["[unintentional]", "[media]", "[article]", "[question]", "[discussion]", "[request]", "[meta]"]): # remove detected tags and check if there are still some left
+                return True # another tag is found
+            else: 
+                return False # those were the only ones
+
+            return False # if the two tags are [intentional] and [roleplay] then allow it
         return True # two tags in title but not intentional and roleplay
     else:
-        return True
+        return False
 
+def link_youtube_channel(comment):
+    m = re.compile("\[\[([^\]]*)\]\]")
+    matches = re.findall(m, comment)
+    channels = {}
+
+    for channel in matches:
+        for name_list in taggable_channels:
+            if channel in name_list:
+                channels[channel] = taggable_channels[name_list]
+                break # breaks out of the for name_list loop
+
+    footer = "\n\n----\n\n[^Add ^a ^channel ^to ^be ^tagged!](/r/asmr/wiki/channel_tags) ^| [^Broken ^link? ^Let ^me ^know](https://www.reddit.com/message/compose?to=theonefoster&subject=broken tag link)"
+
+    if len(channels) > 0:
+
+        if len(channels) > 1: # multiple matches
+            reply = "Here is a list of the youtube channels you tagged:\n\n{list}"
+        else: # one match
+            reply = "Here is the youtube channel you tagged:\n\n{list}"
+
+        list = ""
+        url = "https://www.youtube.com/channel/{id}"
+
+        for channel in channels.keys():
+            link = url.format(id = channels[channel])
+            list += "* [{channel}]({link})\n\n".format(channel=channel.title(), link=link)
+
+        return reply.format(list=list) + footer
+    else:
+        return ""
+    
 def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
     toplist = shelve.open("topPosts","c")
     submissions = subreddit.get_top_from_all(limit=1000)
@@ -570,7 +628,7 @@ def update_top_submissions(): # updates recommendation database. Doesn't usually
                     print("Youtube Exception. Bad link?")
             except Exception as e:
                 print("Other exception - " + str(e))
-                #traceback.print_exc()
+                # traceback.print_exc()
     toplist.sync()
     toplist.close()
     print("total videos: " + str(added_count))
@@ -578,7 +636,7 @@ def update_top_submissions(): # updates recommendation database. Doesn't usually
 def recommend_top_submission():
     toplist = shelve.open("topPosts","c")
 
-    if "1" not in list(toplist): #if the database doesn't exist
+    if "1" not in list(toplist): # if the database doesn't exist
         toplist.sync()
         toplist.close()
         update_top_submissions()
@@ -601,7 +659,7 @@ def user_is_active(username, channel_name=""):
 
     return True # not fully implemented yet TODO
 
-    if False: #so I can collapse it in VS :)
+    if False: # so I can collapse it in VS :)
         user = r.get_redditor(username)
 
         time_limit = time.time()-10800000 # 125 days ago (4 months)
@@ -612,7 +670,7 @@ def user_is_active(username, channel_name=""):
         other_comments = [] # comments younger than 120 days on submissions other than their own
         old_other_comments = [] # comments older than 30 days and younger than 120 days and on submissions other than their own
 
-        submissions = list(user.get_submitted(sort="new", time="year", limit=500)) #all submissions by user
+        submissions = list(user.get_submitted(sort="new", time="year", limit=500)) # all submissions by user
         old_submissions = [] # submissions older than 30 days
         other_submissions = [] # submissions younger than 120 days to channels other than their own
         old_other_submissions = [] # submissions older than 30 days and younger than 120 days and on submissions to youtube channels other than their own
@@ -653,7 +711,7 @@ def user_is_active(username, channel_name=""):
                         if submission.created_utc < old_time_limit: # submission was 30<=days<120 ago
                             old_submissions.append(submission) # create a list of submissions from 30-120 days ago
                             if youtube_author != channel_name:
-                                old_other_submissions.append(submission) #create old_other_submissions list
+                                old_other_submissions.append(submission) # create old_other_submissions list
                         else: # submissions less than 30 days ago
                             pass # don't remove submission from submissions
                     else:
@@ -664,7 +722,7 @@ def user_is_active(username, channel_name=""):
                 else:
                     submissions.remove(submission) # remove submissions from more than 120 days ago
             else:
-                submissions.remove(submission) #don't care about submissions in other subreddits
+                submissions.remove(submission) # don't care about submissions in other subreddits
 
         # comments now contains all comments by user in /r/asmr after 90 days ago
         # old_comments is a subset of comments in /r/asmr containing comments from before 30 days ago
@@ -678,7 +736,7 @@ def user_is_active(username, channel_name=""):
               #  or len(old_other_comments) < 3 # at least 1 historical communal comment per month (on someone else's submission)
               #  or len(other_submissions) < 2 # at least 2 overall communal submissions
               #  or len(old_other_submissions) < 1 # at least 1 historical communal submissions
-           # ): #sad
+           # ): # sad
                 return False
         else:
             return True
@@ -691,7 +749,7 @@ def user_is_shadowbanned(username):
         return True
     except Exception as e:
         print("\n\nUnknown exception when checking shadowban for user {user_name} - exception code: \"{code}\"\n\n".format(user_name=username, code=str(e)))
-        #traceback.print_exc()
+        # traceback.print_exc()
         return False
 
 def submission_is_deleted(id):
@@ -704,9 +762,9 @@ def submission_is_deleted(id):
 def add_warning(post, reason=""): # post is a reddit 'thing' (comment or submission) for which the author is receiving a warning
     pure_reason = reason
     
-    if "t3" in post.fullname[:2]: #submission
+    if "t3" in post.fullname[:2]: # submission
         note = reason + " - " + post.short_link + " - {ordinal}"
-    else: #comment
+    else: # comment
         note = reason + " - " + post.permalink  + " - {ordinal}"
     
     if reason != "":
@@ -743,7 +801,7 @@ def add_warning(post, reason=""): # post is a reddit 'thing' (comment or submiss
 
 def is_bad_title(title):
     title = title.lower()
-    if any(phrase in title for phrase in ["[intentional]", "[unintentional]", "[roleplay]", "[role play]"]):
+    if any(tag in title for tag in ["[intentional]", "[unintentional]", "[roleplay]", "[role play]"]):
         for phrase in bad_title_phrases:
             if phrase in title:
                 return True
@@ -766,8 +824,8 @@ def is_banned_link(url):
 def is_roleplay(title, vid_id):
     try:
         title = title.lower()
-        rp_types = ["role play", "roleplay", "role-play", " rp ", "rp."]
-        if "[intentional]" in title: #only care about submissions tagged [intentional]
+        rp_types = ["role play", "roleplay", "role-play", " rp "]
+        if "[intentional]" in title: # only care about submissions tagged [intentional]
             if any(rp in title for rp in rp_types):
                 return True
             else:
@@ -779,14 +837,14 @@ def is_roleplay(title, vid_id):
                     else:
                         tags = get_youtube_video_data("videos", "snippet", "id", vid_id, "tags")
                         if tags != -1:
-                            return any(rp in tags for rp in rp_types) #true if roleplay in tags; false otherwise
+                            return any(rp in tags for rp in rp_types) # true if roleplay in tags; false otherwise
         return False
     except:
         return False
 
-def purge_thread(comment): # recursion is cool
+def purge_thread(comment): 
     for c in comment.replies:
-        purge_thread(c)
+        purge_thread(c) # recursion is cool
     comment.remove(False)
 
 def remove_tech_tuesday():
@@ -801,7 +859,7 @@ def remove_tech_tuesday():
     except praw.errors.HTTPException as e: # if there's no sticky it'll throw a 404 Not Found
         pass
 
-def remove_ffaf(): #can't use parameter in shedules so need separate functions
+def remove_ffaf(): # can't use parameter in shedules so need separate functions
     sticky = subreddit.get_sticky()
     try:
         if "Free-For-All Friday" in sticky.title:
@@ -821,13 +879,13 @@ def clear_user_submissions():
     submissions = user_submission_data["submissions"]
 
     for user in list(submissions.keys()):
-        if user == "un" and len(users) > 2: #if database is reset, dummy data is inserted as a placeholder. Remove this.
-            del submissions["un"]
+        if user == "un" and len(users) > 2: # if database is reset, dummy data is inserted as a placeholder. Remove this.
+            del submissions["un"] # "un" is an invalid reddit username so this is safe.
             continue
         submissions_by_user = submissions[user] 
         temp = list(submissions_by_user)
         for s in temp:
-            if s.date_created < (time.time()-86400): #if the submission was over 24 hours ago
+            if s.date_created < (time.time()-86400): # if the submission was over 24 hours ago
                 submissions_by_user.remove(s) # remove it from the list
 
         if len(submissions_by_user) == 0: # and if there are no submissions by that user in the past 24 hours
@@ -852,7 +910,7 @@ def clear_video_submissions():
     for key in dict_keys:
         if key == "id" and len(dict_keys) > 2:
             del submissions_dict[key]
-        elif submissions_dict[key].date_created < (time.time() - 7948800): #if submission was more than 3 months ago
+        elif submissions_dict[key].date_created < (time.time() - 7948800): # if submission was more than 3 months ago
             del submissions_dict[key]
 
     recent_video_data["videos"] = submissions_dict
@@ -897,10 +955,10 @@ if __name__ == "__main__":
 
     schedule.every().thursday.at("23:50").do(remove_ffaf)
     schedule.every().wednesday.at("18:00").do(remove_tech_tuesday)
-    schedule.every(14).days.at("03:00").do(update_top_submissions) #once per fortnight ish
+    schedule.every(14).days.at("03:00").do(update_top_submissions) # once per fortnight ish
     schedule.every().hour.do(clear_user_submissions)
     schedule.every().day.do(update_seen_objects)
-    schedule.every().day.at("02:00").do(clear_video_submissions) #once per day
+    schedule.every().day.at("02:00").do(clear_video_submissions) # once per day
     schedule.every().hour.do(get_banned_channels)
 
     print("Setup complete. Starting bot duties.")
@@ -919,7 +977,7 @@ if __name__ == "__main__":
                 time.sleep(30)
         except Exception as e:
             print("Unknown exception: " + str(e))
-            #traceback.print_exc()
+            # traceback.print_exc()
             try:
                 r = login()
             except Exception as f:
