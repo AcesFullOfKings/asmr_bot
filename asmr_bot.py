@@ -16,12 +16,6 @@ import schedule
 import asmr_bot_data as d # d for data
 import theonefoster_bot # used to delete subreddit reply commands
 
-
-
-"TODO: timestamped youtube links are not being recognised as unique from the untimestamped link"
-
-
-
 class my_submission_type():
     sub_permalink = ""
     sub_ID = ""
@@ -45,7 +39,8 @@ mod_list = {'theonefoster', 'nvadergir', 'mahi-mahi', 'asmr_bot', 'underscorewar
 viewed_mod_queue = set()
 modqueue_is_full = True # if bot is restarted it will wait for empty modqueue before full queue notifications begin
 unactioned_modqueue = queue.Queue(0)
-first_run = True # does a lot more processing on first run to catch up with anything missed during downtime
+first_run = False # does a lot more processing on first run to catch up with anything missed during downtime
+first_run_backcheck = 100
 banned_channels = set()
 
 # Messages
@@ -213,7 +208,7 @@ def check_comments():
     global user_submission_data
     global recent_video_data # shouldn't really need these but seems not to work on linux without them
 
-    limit = 100 if first_run else 6
+    limit = first_run_backcheck if first_run else 6
 
     comments = list(subreddit.get_comments(limit=limit)) # sends request
 
@@ -305,16 +300,19 @@ def check_comments():
                         ban_user = parent.author.name
                         msg = "You have been automatically banned for [your post here]({link}). The moderator who banned you provided the following reason: **{reason}**"
 
-                        print("Banning user {ban_user} for post {post}: {reason}".format(ban_user=ban_user, post=parent.id, reason=reason))
-                        parent.remove(False)
-                        remove_mod_comment(comment)
+                        try:
+                            print("Banning user {ban_user} for post {post}: {reason}".format(ban_user=ban_user, post=parent.id, reason=reason))
+                            parent.remove(False)
+                            remove_mod_comment(comment)
                         
-                        note = comment.author.name + ": " + reason
-                        subreddit.add_ban(ban_user, note=note, ban_message=msg.format(link=parent.permalink, reason=reason))
+                            note = comment.author.name + ": " + reason
+                            subreddit.add_ban(ban_user, note=note, ban_message=msg.format(link=parent.permalink, reason=reason))
 
-                        message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\> {reason} \n\n Ban list: /r/asmr/about/banned"
+                            message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\> {reason} \n\n Ban list: /r/asmr/about/banned"
 
-                        r.send_message(recipient=comment_author, subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
+                            r.send_message(recipient=comment_author, subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
+                        except PermissionError:
+                            pass #tried to ban a mod. No banana. don't worry about it.
 
             except AttributeError as ex: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
                 print("Attribute Error! Comment was probably deleted. Comment was " + str(comment.fullname))
@@ -336,7 +334,7 @@ def check_submissions():
     global user_submission_data
     global seen_objects # shouldn't really need these but seems not to work on linux without them
 
-    limit = 50 if first_run else 8
+    limit = first_run_backcheck if first_run else 8
 
     submissions = list(subreddit.get_new(limit=limit))
 
@@ -364,7 +362,7 @@ def check_submissions():
                         submission.add_comment(channel_or_playlist_explain).distinguish(sticky=True)
                         print("Removing submission " + submission.id + " (link to channel/playlist)")
                     else:
-                        if ("youtube." in submission.url or "youtu.be" in submission.url):
+                        if ("youtube." in submission.url or "youtu.be" in submission.url): #redundant?? see elif ^
                             is_youtube_link = True
                             vid_id = get_vid_id(submission.url)
 
@@ -416,8 +414,8 @@ def check_submissions():
                                 recent_video_data["videos"] = recent_videos_copy # copy new dict to shelve (can't add to shelve dict directly)
 
                                 # now check if user has submitted three videos of same channel
-
-                                if submission.author.name not in user_submission_data["submissions"]:
+                                
+                                if submission.author.name not in user_submission_data["submissions"]: #error on this line: "Ran out of input"
                                     subs = user_submission_data["submissions"]
                                     subs[submission.author.name] = [my_sub]
                                     user_submission_data["submissions"] = subs
@@ -433,11 +431,8 @@ def check_submissions():
                                                 count += 1
 
                                     if count >= 3: # 3 or more submissions to same channel in past day
-                                        submission.remove(False)
-                                        submission.add_comment(spam_explain).distinguish(sticky=True)
-                                        print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
-                                    
-                                        submission_links = submission.permalink + "\n\n"
+                                        
+                                        submission_links = submission.permalink + "\n\n" #start the newline-separated list of submission links
                                     
                                         for s in user_submission_list:
                                             submission_links += s.sub_permalink + "\n\n"
@@ -446,10 +441,14 @@ def check_submissions():
 
                                         user_submission_data["submissions"][submission.author.name] = [] # clear the list (user is banned anyway)
 
-                                        note = "too many links to same youtube channel - 1-day ban"
-                                        msg = "Warning ban for spamming links to a youtube channel"
-                                        subreddit.add_ban(submission.author, duration=1, note=note, ban_message=msg)
+                                        submission.remove(False)
+                                        submission.add_comment(spam_explain).distinguish(sticky=True) # doesn't mention ban length
+                                        add_warning(post=submission, reason="Automatic warning for spammy behaviour.", spam_warning=True)
+
                                         r.send_message("/r/" + subreddit.display_name, "Ban Notification", "I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **1 day only**. \n\nLinks to the offending submissions:\n\n" + submission_links)
+
+                                        print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
+                                        
                                     else:
                                         subs = user_submission_data["submissions"]  # copy dict
                                         l = subs[submission.author.name] # get list of user submissions
@@ -555,14 +554,14 @@ def check_messages():
 
 def title_has_two_tags(title):
     title = title.lower()
-    two_tags_regex = re.compile('.*\[(intentional|unintentional|roleplay|role play|media|article|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|role play|media|article|discussion|question|meta|request)\].*', re.I)
+    two_tags_regex = re.compile('.*\[(intentional|unintentional|roleplay|role play|journalism|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|role play|journalism|discussion|question|meta|request)\].*', re.I)
     two_tags = (re.search(two_tags_regex, title) is not None) # search the title for two tags; if two are found set true, else set false
 
     if two_tags:
         if "[intentional]" in title and ("[roleplay]" in title or "[role play]" in title):
             title = title.replace("[intentional]", "").replace("[roleplay]", "").replace("[role play]", "")
             
-            if any(f in title for f in ["[unintentional]", "[media]", "[article]", "[question]", "[discussion]", "[request]", "[meta]"]): # remove detected tags and check if there are still some left
+            if any(f in title for f in ["[unintentional]", "[journalism]", "[question]", "[discussion]", "[request]", "[meta]"]): # remove detected tags and check if there are still some left
                 return True # another tag is found
             else: 
                 return False # those were the only ones
@@ -759,45 +758,68 @@ def submission_is_deleted(id):
     except praw.errors.InvalidSubmission:
         return True
 
-def add_warning(post, reason=""): # post is a reddit 'thing' (comment or submission) for which the author is receiving a warning
-    pure_reason = reason
-    
+def add_warning(post, reason="", spam_warning=False): # post is a reddit 'thing' (comment or submission) for which the author is receiving a warning
+
+    if post.author.name in mod_list:
+        raise PermissionError("error on ban attempt - cannot ban moderator " + post.author.name)
+
     if "t3" in post.fullname[:2]: # submission
         note = reason + " - " + post.short_link + " - {ordinal}"
     else: # comment
         note = reason + " - " + post.permalink  + " - {ordinal}"
     
     if reason != "":
-        reason = "\n\n**The moderator who invoked this ban gave the following reason: \"" + reason + "\".** "
+        reason_text = "\n\n**The moderator who invoked this ban gave the following reason: \"" + reason + "\"** "
 
     user = post.author.name
     ordinal = "?"
 
     warnings_cursor.execute("SELECT * FROM warnings WHERE name=?", [user])
-    result = warnings_cursor.fetchone()
+    db_result = warnings_cursor.fetchone()
     
-    if not result:
-        ordinal = "First warning"
+    if not db_result or db_result[1] == 0:
+        if spam_warning and not db_result: # 1-day warning spam ban. Only if spam_warning parameter is True and no previous warnings exist.
+            ordinal = "Soft warning"
+            ban_number = 0
+            ban_length = 1
+            msg = "You have received an automatic warning ban for spamming links to a youtube channel because of your post [here]({link}). This is a soft warning to give you an opportunity to read the subreddit and site-wide rules on self-promotion and spam. {reason}\n\nThis is your soft warning, which is accompanied by a 1-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again.".format(link=post.permalink, reason=reason_text)
+            
+        else: # other ban (spam_warning is false or existing spam ban exists)
+            ordinal = "First warning"
+            ban_number = 1
+            ban_length = 7
+            warnings_cursor.execute("DELETE FROM warnings WHERE name=?", [user])
+            msg = "You have received an automatic warning ban because of your post [here]({link}). {reason}\n\nThis is your first official warning, which is accompanied by a 7-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again. If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early.".format(link=post.permalink, reason=reason_text)
+
+        subreddit.add_ban(post.author, duration=ban_length, note=note.format(ordinal=ordinal), ban_message=msg)
         post.remove(False)
-        warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)", [user, 1])
-        msg = "You have received an automatic warning ban because of your post [here]({link}). {reason}\n\nThis is your first warning, which is accompanied by a 7-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again. If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early.".format(link=post.permalink, reason=reason)
-        subreddit.add_ban(post.author, duration=7, note=note.format(ordinal=ordinal), ban_message=msg)
-    elif result[1] >= 2:
-        ordinal = "Permanent"
-        post.remove(False)
-        warnings_cursor.execute("DELETE FROM warnings WHERE name=?", [user])
-        warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)",  [user, 3])
-        msg = "You have been automatically banned because of your post [here]({link}). {reason}\n\nThis is your third warning, meaning you are now permanently banned.".format(link=post.permalink, reason=reason)
-        subreddit.add_ban(post.author, note=note.format(ordinal=ordinal), ban_message=msg)
-    elif result[1] == 1:
+        warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)", [user, ban_number])
+
+    elif db_result[1] == 1:
         ordinal = "Second warning"
         post.remove(False)
         warnings_cursor.execute("DELETE FROM warnings WHERE name=?", [user])
         warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)",  [user, 2])
-        msg = "You have received an automatic warning ban because of your post [here]({link}). {reason}\n\n**This is your final warning**. You will be banned for the next 30 days; if you receive another warning, you will be permanently banned. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again.".format(link=post.permalink, reason=reason)
+        msg = "You have received an automatic warning ban because of your post [here]({link}). {reason}\n\n**This is your final warning**. You will be banned for the next 30 days; if you receive another warning, you will be permanently banned. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again.".format(link=post.permalink, reason=reason_text)
         subreddit.add_ban(post.author, duration=30, note=note.format(ordinal=ordinal), ban_message=msg)
+
+    elif db_result[1] >= 2:
+        ordinal = "Permanent"
+        post.remove(False)
+        warnings_cursor.execute("DELETE FROM warnings WHERE name=?", [user])
+        warnings_cursor.execute("INSERT INTO warnings VALUES(?,?)",  [user, 3])
+        msg = "You have been automatically banned because of your post [here]({link}). {reason}\n\nThis is your third warning, meaning you are now permanently banned.".format(link=post.permalink, reason=reason_text)
+        subreddit.add_ban(post.author, note=note.format(ordinal=ordinal), ban_message=msg)
+
     warnings_db.commit()
-    print(ordinal + " ban added for " + user + ". Reason: " + pure_reason)
+    print(ordinal + " ban added for " + user + ". Reason: " + reason)
+
+def add_spam_warning(submission, submission_links):
+    """
+    Removes the submission, adds a comment, bans the user, and sends a message to the mods.
+
+    Does not remove any other submissions.
+    """
 
 def is_bad_title(title):
     title = title.lower()
@@ -921,6 +943,9 @@ def get_banned_channels():
         wiki = subreddit.get_wiki_page("banned")
         banned_channels = eval(wiki.content_md)
     except Exception as ex:
+        import asmr_bot_data as d # d for data
+        banned_channels = d.BANNED_CHANNELS #fall back on known (but incomplete) list
+        del(d)
         r.send_message(recipient="theonefoster", subject="Error getting banned channels", message="Exeption when getting banned channels!\n\n" + str(ex) + "\n\n /r/asmr/wiki/banned")
 
 def login():
@@ -959,7 +984,7 @@ if __name__ == "__main__":
     schedule.every().hour.do(clear_user_submissions)
     schedule.every().day.do(update_seen_objects)
     schedule.every().day.at("02:00").do(clear_video_submissions) # once per day
-    schedule.every().hour.do(get_banned_channels)
+    schedule.every(4).hours.do(get_banned_channels) # 6 times per day
 
     print("Setup complete. Starting bot duties.")
 
