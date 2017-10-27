@@ -103,7 +103,7 @@ warnings_db.commit()
 def get_youtube_video_data(location, part, input_type, input_val, return_val):
 
     # read like "from LOCATION, get the PART where INPUT_TYPE is INPUT_VAL and return RETURN_VAL"
-    # where location is channels/videos, part is statistics/snippet/status, type is id or fromUsername, val is the search value, return value is the data you want
+    # where location is channels/videos, part is statistics/snippet/status, input_type is id or fromUsername, input_val is the search value, return_val is the data you want
      
     input_val = input_val.replace(" ", "") # remove spaces (http doesn't like spaces, and it works fine without them: usernames don't have spaces but people think they do: "CGP Grey" is really "cgpgrey")
 
@@ -278,19 +278,17 @@ def check_comments():
                         print("Removing comment tree in response to " + comment_author + " (kill thread)")
                         try:
                             parent = r.get_info(thing_id=comment.parent_id)
-                            if parent.fullname.startswith("t1"):# comment
+                            if parent.fullname.startswith("t1"): # comment
                                 parent.refresh()
                                 purge_thread(parent)
                             else:
-                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") # todo: wat
-                            
-                            remove_mod_comment(comment)
+                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.")
                         except Exception as e:
                             print("Exception when purging comment tree - "+str(e)+"\nParent was " + parent.id)
                             # traceback.print_exc()
                             r.send_message(recipient=comment_author, subject="Failed command", message="Your purge command failed for an unknown reason. Your comment was removed.")
                         finally:
-                            comment.remove(False)
+                            remove_mod_comment(comment)
                     elif "!ban" == comment_body[:4]:
                         reason = comment_body[5:]
                         if reason == "":
@@ -526,7 +524,7 @@ def check_messages():
                                             message.reply(replies.no_verification)
                                             print("flair verification for " + channel_name + " failed - no verification message.")
                                     else:
-                                        message.reply(replies.inactive)
+                                        message.reply(replies.too_new)
                                         print("flair verification for " + channel_name + " failed - account is too new.")
                                 else:
                                     message.reply(replies.not_enough_videos.format(vid_count = str(video_count)))
@@ -893,7 +891,7 @@ def asmr_bot():
 
 r = login()
 subreddit = r.get_subreddit("asmr")
-user_is_too_new("theonefoster")
+
 if __name__ == "__main__":
     tof = theonefoster_bot.login()
     del(theonefoster_bot)
