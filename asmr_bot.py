@@ -1,5 +1,4 @@
 # for /u/asmr_bot 
-import praw
 import time
 import datetime
 import sqlite3
@@ -7,11 +6,12 @@ import re
 import random
 import shelve
 import string
-import requests
 import traceback
 import queue
 
+import praw
 import schedule
+import requests
 
 import asmr_bot_data as d # d for data
 import theonefoster_bot # used to delete subreddit reply commands
@@ -35,7 +35,7 @@ bad_title_phrases = d.bad_title_phrases
 g_browser_key = d.g_browser_key
 
 # global variables
-mod_list = {'theonefoster', 'nvadergir', 'mahi-mahi', 'asmr_bot', 'underscorewarrior'}
+mod_list = {'theonefoster', 'nvadergir', 'mahi-mahi', 'asmr_bot', 'underscorewarrior', 'roflbbq', 'unicornica'}
 viewed_mod_queue = set()
 modqueue_is_full = True # if bot is restarted it will wait for empty modqueue before full queue notifications begin
 unactioned_modqueue = queue.Queue(0)
@@ -103,7 +103,7 @@ warnings_db.commit()
 def get_youtube_video_data(location, part, input_type, input_val, return_val):
 
     # read like "from LOCATION, get the PART where INPUT_TYPE is INPUT_VAL and return RETURN_VAL"
-    # where location is channels/videos, part is statistics/snippet/status, input_type is id or fromUsername, input_val is the search value, return_val is the data you want
+    # where location is channels/videos, part is statistics/snippet/status, type is id or fromUsername, val is the search value, return value is the data you want
      
     input_val = input_val.replace(" ", "") # remove spaces (http doesn't like spaces, and it works fine without them: usernames don't have spaces but people think they do: "CGP Grey" is really "cgpgrey")
 
@@ -278,17 +278,19 @@ def check_comments():
                         print("Removing comment tree in response to " + comment_author + " (kill thread)")
                         try:
                             parent = r.get_info(thing_id=comment.parent_id)
-                            if parent.fullname.startswith("t1"): # comment
+                            if parent.fullname.startswith("t1"):# comment
                                 parent.refresh()
                                 purge_thread(parent)
                             else:
-                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.")
+                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") # todo: wat
+                            
+                            remove_mod_comment(comment)
                         except Exception as e:
                             print("Exception when purging comment tree - "+str(e)+"\nParent was " + parent.id)
                             # traceback.print_exc()
                             r.send_message(recipient=comment_author, subject="Failed command", message="Your purge command failed for an unknown reason. Your comment was removed.")
                         finally:
-                            remove_mod_comment(comment)
+                            comment.remove(False)
                     elif "!ban" == comment_body[:4]:
                         reason = comment_body[5:]
                         if reason == "":
@@ -524,7 +526,7 @@ def check_messages():
                                             message.reply(replies.no_verification)
                                             print("flair verification for " + channel_name + " failed - no verification message.")
                                     else:
-                                        message.reply(replies.too_new)
+                                        message.reply(replies.inactive)
                                         print("flair verification for " + channel_name + " failed - account is too new.")
                                 else:
                                     message.reply(replies.not_enough_videos.format(vid_count = str(video_count)))
@@ -821,8 +823,9 @@ def clear_user_submissions():
     # every submission they've made in the last 24 hours
 
     submissions = user_submission_data["submissions"]
-
-    for user in list(submissions.keys()):
+    users = list(submissions.keys())
+    
+    for user in users:
         if user == "un" and len(users) > 2: # if database is reset, dummy data is inserted as a placeholder. Remove this.
             del submissions["un"] # "un" is an invalid reddit username so this is safe.
             continue
@@ -891,7 +894,6 @@ def asmr_bot():
 
 r = login()
 subreddit = r.get_subreddit("asmr")
-
 if __name__ == "__main__":
     tof = theonefoster_bot.login()
     del(theonefoster_bot)
@@ -924,7 +926,7 @@ if __name__ == "__main__":
                 time.sleep(30)
         except Exception as e:
             print("Unknown exception: " + str(e))
-            # traceback.print_exc()
+            traceback.print_exc()
             try:
                 r = login()
             except Exception as f:
