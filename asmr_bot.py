@@ -6,7 +6,7 @@ import re
 import random
 import shelve
 import string
-import traceback
+#import traceback
 import queue
 
 import praw
@@ -918,7 +918,7 @@ if __name__ == "__main__":
         except praw.errors.HTTPException as e:
             try:
                 print("HTTP Exception: " + str(e))
-                traceback.print_exc()
+                #traceback.print_exc()
                 r = login()
             except Exception as f:
                 print("Login failed: " + str(f))
@@ -926,7 +926,7 @@ if __name__ == "__main__":
                 time.sleep(30)
         except Exception as e:
             print("Unknown exception: " + str(e))
-            traceback.print_exc()
+            #traceback.print_exc()
             try:
                 r = login()
             except Exception as f:
