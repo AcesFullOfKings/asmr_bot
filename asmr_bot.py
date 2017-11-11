@@ -91,10 +91,6 @@ recent_video_data.sync()
 
 # Open sql databases
 print("Opening databases..")
-#warnings_db = sqlite3.connect('warnings.db') # for warnings database (bad if corrupted so not using shelve as it's lost data in the past)
-#warnings_cursor = warnings_db.cursor()
-#warnings_cursor.execute("CREATE TABLE IF NOT EXISTS warnings(NAME TEXT, WARNINGS INTEGER)")
-#warnings_db.commit()
 
 warnings_db = sqlite3.connect('warnings.db', detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) # for warnings database (bad if corrupted so not using shelve as it's lost data in the past)
 warnings_cursor = warnings_db.cursor()
@@ -463,7 +459,7 @@ def check_submissions():
                                     subs[submission.author.name] = l # update dict value
                                     user_submission_data["submissions"] = subs # write dict back to shelve 
                 except Exception as ex:
-                    print("exception on removal of submission " + submission.short_link + " - " + str(ex))
+                    print("exception on processing of submission " + submission.short_link + " - " + str(ex))
                     
                     if "ran out of input" in str(ex).lower():
                         break
@@ -690,7 +686,6 @@ def submission_is_deleted(id):
     except praw.errors.InvalidSubmission:
         return True
 
-####THIS WILL BE MUCH BETTER HONEST
 def new_warning(post, banning_mod, reason="", spam_warning=False):
     user = post.author.name.lower()
 
@@ -966,7 +961,7 @@ def asmr_bot():
 r = login()
 subreddit = r.get_subreddit("asmr")
 lounge = r.get_subreddit("asmrcreatorlounge")
-update_warnings_wiki()
+
 if __name__ == "__main__":
     tof = theonefoster_bot.login()
     del(theonefoster_bot)
@@ -996,7 +991,7 @@ if __name__ == "__main__":
         except praw.errors.HTTPException as e:
             try:
                 print("HTTP Exception: " + str(e))
-                traceback.print_exc()
+                #traceback.print_exc()
                 r = login()
             except Exception as f:
                 print("Login failed: " + str(f))
@@ -1004,7 +999,7 @@ if __name__ == "__main__":
                 time.sleep(30)
         except Exception as e:
             print("Unknown exception: " + str(e))
-            traceback.print_exc()
+            #traceback.print_exc()
             try:
                 r = login()
             except Exception as f:
