@@ -59,6 +59,7 @@ channel_or_playlist_explain = d.CHANNEL_PLAYLIST_EXPLAIN
 replies = d.messages
 comment_reply = d.comment_reply
 taggable_channels = d.linkable_channels
+capital_explain = d.CAPITAL_TITLE
 del(d)
 
 vid_id_regex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
@@ -357,8 +358,13 @@ def check_submissions():
             elif is_bad_title(submission.title):
                 submission.remove(False)
                 submission.add_comment(auto_title_explain).distinguish(sticky=True)
-                r.send_message(recipient="theonefoster", subject="Bad Title - Submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
+                r.send_message(recipient="theonefoster", subject="Bad title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
                 print("Removed submission " + submission.id + " for having a bad title.")
+            elif title_is_caps(submission.title):
+                submission.remove(False)
+                submission.add_comment(capital_explain).distinguish(sticky=True)
+                r.send_message(recipient="theonefoster", subject="Upper case title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
+                print("Removed submission " + submission.id + " for having an uppercase title.")
             elif ("youtube" in submission.url or "youtu.be" in submission.url):
                 try:
                     if is_banned_link(submission.url):
@@ -407,6 +413,9 @@ def check_submissions():
                             my_sub.sub_ID = submission.id
                             my_sub.channel_ID = channel_id
                             my_sub.date_created = submission.created_utc
+
+                            time.sleep(1)
+                            submission.refresh() #I wonder if this will solve the "Nonetype has no attribute 'lower()'" issue..
 
                             if submission.link_flair_text.lower() != "roleplay" and "[intentional]" in submission.title.lower() and is_roleplay(submission.title, vid_id):
                                 submission.set_flair("ROLEPLAY", "roleplay")
@@ -558,25 +567,6 @@ def check_messages():
             pass
         finally:
             message.mark_as_read()
-
-def title_has_two_tags(title):
-    title = title.lower()
-    two_tags_regex = re.compile('.*\[(intentional|unintentional|roleplay|role play|journalism|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|role play|journalism|discussion|question|meta|request)\].*', re.I)
-    two_tags = (re.search(two_tags_regex, title) is not None) # search the title for two tags; if two are found set true, else set false
-
-    if two_tags:
-        if "[intentional]" in title and ("[roleplay]" in title or "[role play]" in title):
-            title = title.replace("[intentional]", "").replace("[roleplay]", "").replace("[role play]", "")
-            
-            if any(f in title for f in ["[unintentional]", "[journalism]", "[question]", "[discussion]", "[request]", "[meta]"]): # remove detected tags and check if there are still some left
-                return True # another tag is found
-            else: 
-                return False # those were the only ones
-
-            return False # if the two tags are [intentional] and [roleplay] then allow it
-        return True # two tags in title but not intentional and roleplay
-    else:
-        return False
 
 def link_youtube_channel(comment):
     m = re.compile("\[\[([^\]]*)\]\]")
@@ -775,15 +765,60 @@ def is_bad_title(title):
                 return True
     return False
 
+def title_has_two_tags(title):
+    title = title.lower()
+    two_tags_regex = re.compile('.*\[(intentional|unintentional|roleplay|role play|journalism|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|role play|journalism|discussion|question|meta|request)\].*', re.I)
+    two_tags = (re.search(two_tags_regex, title) is not None) # search the title for two tags; if two are found set true, else set false
+
+    if two_tags:
+        if "[intentional]" in title and ("[roleplay]" in title or "[role play]" in title):
+            title = title.replace("[intentional]", "").replace("[roleplay]", "").replace("[role play]", "")
+            
+            if any(f in title for f in ["[unintentional]", "[journalism]", "[question]", "[discussion]", "[request]", "[meta]"]): # remove detected tags and check if there are still some left
+                return True # another tag is found
+            else: 
+                return False # those were the only ones
+
+            return False # if the two tags are [intentional] and [roleplay] then allow it
+        return True # two tags in title but not intentional and roleplay
+    else:
+        return False
+
+def title_is_caps(title):
+    title.replace("ASMR", "") # Remove the string "ASMR"
+    title.replace("[INTENTIONAL]", "") # Remove the string "INTENTIONAL"
+    title.replace("[Intentional]", "")
+    title.replace("[intentional]", "")
+    title.replace("[UNINTENTIONAL]", "") # Remove the string "UNINTENTIONAL"
+    title.replace("[Unintentional]", "")
+    title.replace("[unintentional]", "")
+    title = ''.join(char for char in title if char in "etaoinsrhldcufmpgwybvkxjqzABCDEFGHIJKLMNOPQRSTUVWXYZ ")  # Remove anything that isn't alphabetic or a space
+
+    words = title.split(" ")
+    tails = []
+
+    for word in words:
+        tails.append(word[1:]) #Remove first letter of each word
+
+    normalised_title = ""
+    normalised_title = "".join(word for word in tails)
+    capitals = "".join(char for char in normalised_title if char.upper() == char)
+    
+    if len(capitals) >= 0.2 * len(normalised_title):
+        return True
+    else:
+        return False
+
+
 def is_banned_link(url):
-    if (    (   ".youtube." in url 
+    if (   (    ".youtube." in url 
              or "youtu.be"  in url
-            )
-        and ("playlist" in url
-             or "list=" in url 
+           )
+        and(    "playlist"  in url
+             or "list="     in url 
              or "/channel/" in url 
-             or "/user/" in url
-            )
+             or "/user/"    in url
+           )
        ): # sad
         return True
     else:
