@@ -785,13 +785,13 @@ def title_has_two_tags(title):
         return False
 
 def title_is_caps(title):
-    title.replace("ASMR", "") # Remove the string "ASMR"
-    title.replace("[INTENTIONAL]", "") # Remove the string "INTENTIONAL"
-    title.replace("[Intentional]", "")
-    title.replace("[intentional]", "")
-    title.replace("[UNINTENTIONAL]", "") # Remove the string "UNINTENTIONAL"
-    title.replace("[Unintentional]", "")
-    title.replace("[unintentional]", "")
+    title = title.replace("ASMR", "") # Remove the string "ASMR"
+    title = title.replace("[INTENTIONAL]", "") # Remove the string "INTENTIONAL"
+    title = title.replace("[Intentional]", "")
+    title = title.replace("[intentional]", "")
+    title = title.replace("[UNINTENTIONAL]", "") # Remove the string "UNINTENTIONAL"
+    title = title.replace("[Unintentional]", "")
+    title = title.replace("[unintentional]", "")
     title = ''.join(char for char in title if char in "etaoinsrhldcufmpgwybvkxjqzABCDEFGHIJKLMNOPQRSTUVWXYZ ")  # Remove anything that isn't alphabetic or a space
 
     words = title.split(" ")
@@ -801,10 +801,10 @@ def title_is_caps(title):
         tails.append(word[1:]) #Remove first letter of each word
 
     normalised_title = ""
-    normalised_title = "".join(word for word in tails)
-    capitals = "".join(char for char in normalised_title if char.upper() == char)
+    normalised_title = "".join(word for word in tails) # merge words back together
+    capitals = "".join(char for char in normalised_title if char.upper() == char) # copy only capitals
     
-    if len(capitals) >= 0.2 * len(normalised_title):
+    if len(capitals) >= 0.2 * len(normalised_title): #if capitals are 20% of remaining title
         return True
     else:
         return False
