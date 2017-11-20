@@ -706,6 +706,8 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
         reason_text = "**The moderator who invoked this ban, /u/{mod}, did not provide a reason for the ban.**\n\n "
         if spam_warning:
             reason = "spam"
+        else:
+            reason = "<No reason provided>"
 
     link = ""
     if "t3" in post.fullname[:2]: # submission
@@ -1014,7 +1016,7 @@ def asmr_bot():
 r = login()
 subreddit = r.get_subreddit("asmr")
 lounge = r.get_subreddit("asmrcreatorlounge")
-
+update_warnings_wiki()
 if __name__ == "__main__":
     tof = theonefoster_bot.login()
     del(theonefoster_bot)
