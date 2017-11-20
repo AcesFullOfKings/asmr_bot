@@ -1016,7 +1016,7 @@ def asmr_bot():
 r = login()
 subreddit = r.get_subreddit("asmr")
 lounge = r.get_subreddit("asmrcreatorlounge")
-update_warnings_wiki()
+
 if __name__ == "__main__":
     tof = theonefoster_bot.login()
     del(theonefoster_bot)
