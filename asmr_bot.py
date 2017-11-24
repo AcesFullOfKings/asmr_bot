@@ -248,44 +248,44 @@ def check_comments():
                 # moderator commands
                 if (comment_author in mod_list) and comment.banned_by is None: #if mod comment not removed..
                     if "!meta" == comment_body[:5]:
-                        print("Removing submission in response to " + comment_author + " (bad meta post)")
+                        print("Removed submission in response to " + comment_author + " (bad meta post)")
                         remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
-                        submission.add_comment(meta_explain).distinguish(sticky=True)
+                        submission.add_comment(meta_explain.format(mod=comment_author)).distinguish(sticky=True)
                     elif "!music" == comment_body[:6]:
-                        print("Removing submission in response to " + comment_author + " (music)")
+                        print("Removed submission in response to " + comment_author + " (music)")
                         remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
-                        submission.add_comment(mus_explain).distinguish(sticky=True)
+                        submission.add_comment(mus_explain.format(mod=comment_author)).distinguish(sticky=True)
                     elif "!title" == comment_body[:6]:
-                        print("Removing submission in response to " + comment_author + " (bad title)")
+                        print("Removed submission in response to " + comment_author + " (bad title)")
                         remove_mod_comment(comment)
                         submission_id = comment.parent_id
                         submission = r.get_submission(submission_id=submission_id[3:])
                         submission.remove(False)
-                        submission.add_comment(mod_title_explain).distinguish(sticky=True)
+                        submission.add_comment(mod_title_explain.format(mod=comment_author)).distinguish(sticky=True)
                     elif "!warning" == comment_body[:8]:
                         reason = comment_body[9:]
                         remove_mod_comment(comment)
                         parent = r.get_info(thing_id=comment.parent_id)
                         if not user_is_subreddit_banned(parent.author.name):
-                            print("Removing post in response to " + comment_author + " (add warning)")
+                            print("Removed post in response to " + comment_author + " (add warning)")
                             new_warning(parent, comment_author, reason, False)
                             parent.remove(False)
                         else:
                             print("Not adding warning in response to " + comment_author + " - user /u/" + parent.author.name + " is already banned.")
                             r.send_message(recipient=comment_author, subject="Warning not added", message="No warning ban for /u/" + parent.author.name + " was added because that user is already banned. Their comment and your command have been removed.")
                     elif "!remove" == comment_body[:7]:
-                        print("Removing post in response to " + comment_author + " (remove by request)")
+                        print("Removed post in response to " + comment_author + " (remove by request)")
                         remove_mod_comment(comment)
                         parent = r.get_info(thing_id=comment.parent_id)
                         parent.remove(False)
                     elif "!purge" == comment_body[:6]:
-                        print("Removing comment tree in response to " + comment_author + " (kill thread)")
+                        print("Removed comment tree in response to " + comment_author + " (kill thread)")
                         try:
                             parent = r.get_info(thing_id=comment.parent_id)
                             if parent.fullname.startswith("t1"):# comment
@@ -375,7 +375,7 @@ def check_submissions():
                     if is_banned_link(submission.url):
                         submission.remove(False)
                         submission.add_comment(channel_or_playlist_explain).distinguish(sticky=True)
-                        print("Removing submission " + submission.id + " (link to channel/playlist)")
+                        print("Removed submission " + submission.id + " (link to channel/playlist)")
                     else:
                         vid_id = get_vid_id(submission.url)
                         channel_id = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelId")                  
@@ -384,12 +384,12 @@ def check_submissions():
                         if channel_id in banned_channels:
                             submission.remove(False) # checks for banned youtube channels
                             submission.add_comment(banned_channel_explain).distinguish(sticky=True)
-                            print("Removing submission " + submission.id + " (banned youtube channel)..")
+                            print("Removed submission " + submission.id + " (banned youtube channel)")
                             removed = True
                         elif video_is_unlisted(vid_id):
                             submission.remove(False)
                             submission.add_comment(unlisted_explain).distinguish(sticky=True)
-                            print("Removing submission " + submission.short_link + " (unlisted video)..")
+                            print("Removed submission " + submission.short_link + " (unlisted video)")
                             removed = True
                         elif vid_id in recent_video_data["videos"]: # submission is repost
                             my_old_post = recent_video_data["videos"][vid_id]
@@ -410,7 +410,7 @@ def check_submissions():
                                 comment = repost_explain.format(old_link=old_post.permalink)
                                 submission.add_comment(comment).distinguish(sticky=True)
                                 removed = True
-                                print("Removing submission " + submission.id + " (reposted video)..")
+                                print("Removed submission " + submission.id + " (reposted video)")
 
                         if not removed: # successful submission (youtube links only)
                             my_sub = my_submission_type()
