@@ -40,8 +40,9 @@ viewed_mod_queue = set()
 modqueue_is_full = True # if bot is restarted it will wait for empty modqueue before full queue notifications begin
 unactioned_modqueue = queue.Queue(0)
 first_run = True # does a lot more processing on first run to catch up with anything missed during downtime
-first_run_backcheck = 100
+first_run_backcheck = 40
 banned_channels = set()
+channel_regex = re.compile("\[\[([^\]]*)\]\]")
 
 # Messages
 meta_explain = d.META_EXPLAIN
@@ -60,6 +61,7 @@ replies = d.messages
 comment_reply = d.comment_reply
 taggable_channels = d.linkable_channels
 capital_explain = d.CAPITAL_TITLE
+edit_link = d.EDIT_LINK
 del(d)
 
 vid_id_regex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
@@ -129,19 +131,16 @@ def days_since_youtube_channel_creation(**kwargs):
     elif "name" in kwargs:
         creation_date = get_youtube_video_data("channels", "snippet", "forUsername", kwargs["name"], "publishedAt")
     else:
-        creation_date = -1
+        return -1
 
-    if (creation_date != -1):
-        try:
-            year = creation_date[0:4]
-            month = creation_date[5:7]
-            day = creation_date[8:10]
+    try:
+        year = creation_date[0:4]
+        month = creation_date[5:7]
+        day = creation_date[8:10]
 
-            channel_date = datetime.date(year=int(year),month=int(month),day=int(day))
-            return datetime.datetime.today().toordinal() - channel_date.toordinal()
-        except Exception as e:
-            return -1
-    else:
+        channel_date = datetime.date(year=int(year),month=int(month),day=int(day))
+        return datetime.datetime.today().toordinal() - channel_date.toordinal()
+    except Exception as e:
         return -1
 
 def video_is_unlisted(ID):
@@ -182,14 +181,6 @@ def check_mod_queue():
             schedule.every().day.at(scheduletime).do(check_old_mod_queue_item)
 
             if user_is_shadowbanned(item.author.name):
-                print("Replying to shadowbanned user " + item.author.name)
-             
-                if item.fullname.startswith("t3"):  # submission
-                    item.remove(False)
-                    item.add_comment(sb_explain).distinguish(sticky=True)
-                elif item.fullname.startswith("t1"): # comment
-                    item.remove(False)
-                    r.send_message(recipient=item.author, subject="Shadowban notification", message=sb_explain_msg)
                 item.clicked = True
             elif len(modqueue) >= 4 and modqueue_is_full == False:
                 print("Full modqueue detected! Messaging mods..")
@@ -273,16 +264,16 @@ def check_comments():
                         remove_mod_comment(comment)
                         parent = r.get_info(thing_id=comment.parent_id)
                         if not user_is_subreddit_banned(parent.author.name):
-                            print("Removed post in response to " + comment_author + " (add warning)")
+                            print("Removed submission in response to " + comment_author + " (add warning)")
                             new_warning(parent, comment_author, reason, False)
                             parent.remove(False)
                         else:
                             print("Not adding warning in response to " + comment_author + " - user /u/" + parent.author.name + " is already banned.")
                             r.send_message(recipient=comment_author, subject="Warning not added", message="No warning ban for /u/" + parent.author.name + " was added because that user is already banned. Their comment and your command have been removed.")
                     elif "!remove" == comment_body[:7]:
-                        print("Removed post in response to " + comment_author + " (remove by request)")
-                        remove_mod_comment(comment)
                         parent = r.get_info(thing_id=comment.parent_id)
+                        print("Removed item " + str(comment.parent_id) + " in response to " + comment_author + " (remove by request)")
+                        remove_mod_comment(comment)
                         parent.remove(False)
                     elif "!purge" == comment_body[:6]:
                         print("Removed comment tree in response to " + comment_author + " (kill thread)")
@@ -314,15 +305,13 @@ def check_comments():
                             print("Banning user {ban_user} for post {post}: {reason}".format(ban_user=ban_user, post=parent.id, reason=reason))
                             parent.remove(False)
                             remove_mod_comment(comment)
-                        
                             note = comment.author.name + ": " + reason + ": " + parent.permalink
+
                             subreddit.add_ban(ban_user, note=note, ban_message=msg.format(link=parent.permalink, reason=reason))
-
                             message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\> {reason} \n\n Ban list: /r/asmr/about/banned"
-
                             r.send_message(recipient=comment_author, subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
                         except PermissionError:
-                            pass #tried to ban a mod. No banana. don't worry about it.
+                            pass #tried to ban a mod. No banana. Don't worry about it.
 
             except AttributeError as ex: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
                 print("Attribute Error! Comment was probably deleted. Comment was " + str(comment.fullname))
@@ -333,7 +322,7 @@ def remove_mod_comment(comment):
     """If comment was made by me, I have the authentication to delete it, which is preferred. Otherwise Remove it since I can't delete other mods' comments
     """
     if comment.author.name == "theonefoster":
-        my_comment = tof.get_info(thing_id = comment.fullname)
+        my_comment = tof.get_info(thing_id=comment.fullname)
         my_comment.delete()
     else:
         comment.remove(False)
@@ -370,6 +359,10 @@ def check_submissions():
                 submission.add_comment(capital_explain).distinguish(sticky=True)
                 r.send_message(recipient="theonefoster", subject="Upper case title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
                 print("Removed submission " + submission.id + " for having an uppercase title.")
+            elif "youtube.com/edit" in submission.url:
+                submission.remove(False)
+                submission.add_comment(edit_link).distinguish(sticky=True)
+                print("Removed submission " + submission.id + " (link to edit page)")
             elif ("youtube" in submission.url or "youtu.be" in submission.url):
                 try:
                     if is_banned_link(submission.url):
@@ -419,10 +412,10 @@ def check_submissions():
                             my_sub.channel_ID = channel_id
                             my_sub.date_created = submission.created_utc
 
-                            time.sleep(1)
-                            submission.refresh() #I wonder if this will solve the "Nonetype has no attribute 'lower()'" issue..
-
-                            if submission.link_flair_text.lower() != "roleplay" and "[intentional]" in submission.title.lower() and is_roleplay(submission.title, vid_id):
+                            if (submission.link_flair_text is not None and 
+                               submission.link_flair_text.lower() != "roleplay" and 
+                               "[intentional]" in submission.title.lower() and 
+                               is_roleplay(submission.title, vid_id)):
                                 submission.set_flair("ROLEPLAY", "roleplay")
                                 print("Reflaired submission " + submission.id + " as roleplay.")
                                     
@@ -579,8 +572,8 @@ def check_messages():
             message.mark_as_read()
 
 def link_youtube_channel(comment):
-    m = re.compile("\[\[([^\]]*)\]\]")
-    matches = re.findall(m, comment)
+    global channel_regex
+    matches = re.findall(channel_regex, comment)
     channels = {}
 
     for channel in matches:
@@ -592,7 +585,6 @@ def link_youtube_channel(comment):
     footer = "\n\n----\n\n[^Add ^a ^channel ^to ^be ^tagged!](/r/asmr/wiki/channel_tags) ^| [^Broken ^link? ^Let ^me ^know](https://www.reddit.com/message/compose?to=theonefoster&subject=broken tag link)"
 
     if len(channels) > 0:
-
         if len(channels) > 1: # multiple matches
             reply = "Here is a list of the youtube channels you tagged:\n\n{list}"
         else: # one match
@@ -671,11 +663,11 @@ def user_is_too_new(user):
 def user_is_shadowbanned(username):
     try:
         user = r.get_redditor(user_name=username, fetch=True)
-        return False
+        return False #if fetch is successful then user is not shadowbanned
     except praw.errors.HTTPException:
-        return True
+        return True #if fetch returns 404 then user is shadowbanned
     except Exception as e:
-        print("\nUnknown exception when checking shadowban for user {user_name} - exception code: \"{code}\"\n".format(user_name=username, code=str(e)))
+        # print("\nUnknown exception when checking shadowban for user {user_name} - exception code: \"{code}\"\n".format(user_name=username, code=str(e)))
         # traceback.print_exc()
         return False
 
@@ -947,7 +939,6 @@ def get_banned_channels():
 def update_warnings_wiki():
     warnings_cursor.execute("SELECT * FROM warnings")
     db_result = warnings_cursor.fetchall()
-
     warned_users = dict()
 
     for war in db_result:
@@ -969,7 +960,6 @@ def update_warnings_wiki():
     for user in warned_users.keys():
         bans = warned_users[user]
         warnings = len(bans)
-
         page = page + "/u/" + user
        
         for ban in bans:
@@ -1016,7 +1006,7 @@ def asmr_bot():
 r = login()
 subreddit = r.get_subreddit("asmr")
 lounge = r.get_subreddit("asmrcreatorlounge")
-
+update_warnings_wiki()
 if __name__ == "__main__":
     tof = theonefoster_bot.login()
     del(theonefoster_bot)
