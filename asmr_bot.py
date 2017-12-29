@@ -238,25 +238,24 @@ def check_comments():
                     
                 # moderator commands
                 if (comment_author in mod_list) and comment.banned_by is None: #if mod comment not removed..
+                    submission_id = comment.parent_id
+                    
                     if "!meta" == comment_body[:5]:
-                        print("Removed submission in response to " + comment_author + " (bad meta post)")
-                        remove_mod_comment(comment)
-                        submission_id = comment.parent_id
+                        print("Removed submission " + submission_id + " in response to " + comment_author + " (bad meta post)")
                         submission = r.get_submission(submission_id=submission_id[3:])
+                        remove_mod_comment(comment)
                         submission.remove(False)
                         submission.add_comment(meta_explain.format(mod=comment_author)).distinguish(sticky=True)
                     elif "!music" == comment_body[:6]:
-                        print("Removed submission in response to " + comment_author + " (music)")
-                        remove_mod_comment(comment)
-                        submission_id = comment.parent_id
+                        print("Removed submission " + submission_id + " in response to " + comment_author + " (music)")
                         submission = r.get_submission(submission_id=submission_id[3:])
+                        remove_mod_comment(comment)
                         submission.remove(False)
                         submission.add_comment(mus_explain.format(mod=comment_author)).distinguish(sticky=True)
                     elif "!title" == comment_body[:6]:
-                        print("Removed submission in response to " + comment_author + " (bad title)")
-                        remove_mod_comment(comment)
-                        submission_id = comment.parent_id
+                        print("Removed submission " + submission_id + " in response to " + comment_author + " (bad title)")
                         submission = r.get_submission(submission_id=submission_id[3:])
+                        remove_mod_comment(comment)
                         submission.remove(False)
                         submission.add_comment(mod_title_explain.format(mod=comment_author)).distinguish(sticky=True)
                     elif "!warning" == comment_body[:8]:
@@ -264,7 +263,7 @@ def check_comments():
                         remove_mod_comment(comment)
                         parent = r.get_info(thing_id=comment.parent_id)
                         if not user_is_subreddit_banned(parent.author.name):
-                            print("Removed submission in response to " + comment_author + " (add warning)")
+                            print("Removed submission " + submission_id + " in response to " + comment_author + " (add warning)")
                             new_warning(parent, comment_author, reason, False)
                             parent.remove(False)
                         else:
@@ -276,7 +275,7 @@ def check_comments():
                         remove_mod_comment(comment)
                         parent.remove(False)
                     elif "!purge" == comment_body[:6]:
-                        print("Removed comment tree in response to " + comment_author + " (kill thread)")
+                        print("Removed comment tree " + submission_id + " in response to " + comment_author + " (kill thread)")
                         try:
                             parent = r.get_info(thing_id=comment.parent_id)
                             if parent.fullname.startswith("t1"):# comment
@@ -791,13 +790,9 @@ def title_has_two_tags(title):
         return False
 
 def title_is_caps(title):
-    title = title.replace("ASMR", "") # Remove the string "ASMR"
-    title = title.replace("[INTENTIONAL]", "") # Remove the string "INTENTIONAL"
-    title = title.replace("[Intentional]", "")
-    title = title.replace("[intentional]", "")
-    title = title.replace("[UNINTENTIONAL]", "") # Remove the string "UNINTENTIONAL"
-    title = title.replace("[Unintentional]", "")
-    title = title.replace("[unintentional]", "")
+    for word in ["ASMR","[INTENTIONAL]","[Intentional]","[intentional]","[UNINTENTIONAL]","[Unintentional]","[unintentional]",]:
+        title = title.replace(word, "") 
+
     title = ''.join(char for char in title if char in "etaoinsrhldcufmpgwybvkxjqzABCDEFGHIJKLMNOPQRSTUVWXYZ ")  # Remove anything that isn't alphabetic or a space
 
     words = title.split(" ")
@@ -814,7 +809,6 @@ def title_is_caps(title):
         return True
     else:
         return False
-
 
 def is_banned_link(url):
     if (   (    ".youtube." in url 
@@ -894,6 +888,7 @@ def clear_user_submissions():
             continue
         submissions_by_user = submissions[user] 
         temp = list(submissions_by_user)
+
         for s in temp:
             if s.date_created < (time.time()-86400): # if the submission was over 24 hours ago
                 submissions_by_user.remove(s) # remove it from the list
@@ -914,7 +909,6 @@ def update_seen_objects():
 
 def clear_video_submissions():
     submissions_dict = recent_video_data["videos"]
-
     dict_keys = list(submissions_dict.keys())
     
     for key in dict_keys:
@@ -951,7 +945,14 @@ def update_warnings_wiki():
         else:
             warnings = len(warned_users[username])
             bans = warned_users[username]
-            ban_number = len(warned_users[username]) + 1
+            
+            previous_bans = -1
+            for ban in warned_users[username]: #may or may not contain a spam warning
+                link, mod, reason, date, previous_ban_number = ban
+                if previous_ban_number > previous_bans:
+                    previous_bans = previous_ban_number
+
+            ban_number = previous_bans + 1
             bans.append((link, mod, reason, date, ban_number))
             warned_users[username] = bans
 
@@ -981,7 +982,6 @@ def user_is_subreddit_banned(username):
     for u in r.get_banned(subreddit="asmr", user_only=False):
         if username.lower() == u["name"].name.lower(): 
             return True
-    
     return False
 
 def login():
@@ -999,9 +999,9 @@ def asmr_bot():
     check_messages()
     check_mod_queue()
 
-# ----------------------------
+# -----------------
 # END OF FUNCTIONS
-# ----------------------------
+# -----------------
 
 r = login()
 subreddit = r.get_subreddit("asmr")
@@ -1011,7 +1011,6 @@ if __name__ == "__main__":
     tof = theonefoster_bot.login()
     del(theonefoster_bot)
     
-
     print("Fetching banned channels..")
     get_banned_channels()
 
