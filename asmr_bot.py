@@ -482,7 +482,6 @@ def check_messages():
         try:
             if not message.was_comment:
                 user = message.author.name
-                print("Message dectected from " + user)
 
                 if ("!recommend" in message.body.lower() or "!recommend" in message.subject.lower()): # recommendation
                     print("Recommending popular video to " + message.author.name)
@@ -559,6 +558,8 @@ def check_messages():
                         r.delete_flair(subreddit="asmr", user=user)
                         message.reply(replies.flair_deleted)
                         print("Flair deleted for " + user)
+                    else:
+                        message.reply("If you're trying to delete your flair, you need to send a message with \"delete flair\" exactly like that in **both** the subject and the message body. This is to make sure you don't accidentally delete your flair!")
                 elif("post reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
                     print("Command not recognised. Message was " + message.body)
                     message.reply(replies.command_not_recognised)
@@ -790,6 +791,9 @@ def title_has_two_tags(title):
         return False
 
 def title_is_caps(title):
+    if all(tag not in title.lower() for tag in ["[intentional]", "[roleplay]", "[unintentional]"]):
+        return false #only care about triggering posts. Caps e.g. [request] posts are condoned
+
     for word in ["ASMR","[INTENTIONAL]","[Intentional]","[intentional]","[UNINTENTIONAL]","[Unintentional]","[unintentional]",]:
         title = title.replace(word, "") 
 
