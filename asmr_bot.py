@@ -559,7 +559,7 @@ def check_messages():
                         message.reply(replies.flair_deleted)
                         print("Flair deleted for " + user)
                     else:
-                        message.reply("If you're trying to delete your flair, you need to send a message with \"delete flair\" exactly like that in **both** the subject and the message body. This is to make sure you don't accidentally delete your flair!")
+                        message.reply("If you're trying to delete your flair, you need to send a message with only \"delete flair\" exactly like that in **both** the subject and the message body. This is to make sure you don't accidentally delete your flair!")
                 elif("post reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
                     print("Command not recognised. Message was " + message.body)
                     message.reply(replies.command_not_recognised)
@@ -685,7 +685,7 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
         raise TypeError("banning_mod must be of type string")
     
     if user in mod_list:
-        raise PermissionError("error on ban attempt - cannot ban moderator " + post.author.name)
+        raise PermissionError("error on ban attempt - cannot ban moderator " + user)
 
     if spam_warning:
         msg_intro = "You have received an automatic warning ban for spamming links to a youtube channel after your post [here]({link}). \n\n"
@@ -792,7 +792,7 @@ def title_has_two_tags(title):
 
 def title_is_caps(title):
     if all(tag not in title.lower() for tag in ["[intentional]", "[roleplay]", "[unintentional]"]):
-        return false #only care about triggering posts. Caps e.g. [request] posts are condoned
+        return False #only care about triggering posts. Caps e.g. [request] posts are condoned
 
     for word in ["ASMR","[INTENTIONAL]","[Intentional]","[intentional]","[UNINTENTIONAL]","[Unintentional]","[unintentional]",]:
         title = title.replace(word, "") 
@@ -1010,8 +1010,8 @@ def asmr_bot():
 r = login()
 subreddit = r.get_subreddit("asmr")
 lounge = r.get_subreddit("asmrcreatorlounge")
-update_warnings_wiki()
 if __name__ == "__main__":
+    update_warnings_wiki()
     tof = theonefoster_bot.login()
     del(theonefoster_bot)
     
