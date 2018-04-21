@@ -156,22 +156,28 @@ def get_vid_id(url):
 
     return vid_id
 
-def check_mod_queue():
-    modqueue = list(subreddit.mod.modqueue())
-    print(modqueue[0]) #modqueue is a list of comments. Each comment has attributes mod_reports and user_reports, which are lists. Each is a list of reports, where each report is a list of ["report reason", int:num reports].
+def check_mod_queue(): #tested - works
     global modqueue_is_full
     global unactioned_modqueue
     global seen_objects
     global user_submission_data
     global recent_video_data # shouldn't really need these but seems not to work on linux without them
-
+    
+    modqueue = list(subreddit.mod.modqueue()) #modqueue is a list of comments. Each comment has attributes mod_reports and user_reports, which are lists. Each is a list of reports, where each report is a list of ["report reason", int:num reports].
+ 
     for item in modqueue:
         if item.fullname not in viewed_mod_queue:
             print("New modqueue item!")
             viewed_mod_queue.add(item.fullname)
 
+            #for 4 hours in future:
             hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour + 4)%24)
             min = str(time.struct_time(time.strptime(time.ctime())).tm_min)
+
+            #for 1 min in future (for testing):
+            #hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour)%24)
+            #min = str((time.struct_time(time.strptime(time.ctime())).tm_min + 1)%60)
+
             schedule_time = hour+":"+min
             
             unactioned_modqueue.put(item)
@@ -180,48 +186,50 @@ def check_mod_queue():
 
             if len(modqueue) >= 4 and modqueue_is_full == False:
                 print("Full modqueue detected! Messaging mods..")
-                subject = "Modqueue items require attention!"
+                subject = "Modqueue items require attention! (bot v5.0)"
                 message = "The modqueue has multiple unactioned items in it - please review them asap! \n\n https://www.reddit.com/r/asmr/about/modqueue/"
                 subreddit.message(subject=subject, message=message)
                 modqueue_is_full = True
             elif len(modqueue) <=2:
                 modqueue_is_full = False
 
-#def check_old_mod_queue_item():
-#    submission = unactioned_modqueue.get()
-#    modqueue = list(r.get_mod_queue(subreddit=subreddit.display_name, fetch=True))
-#    for item in modqueue:
-#        if item.id == submission.id:
-#            print("Modqueue item unactioned for 4 hours - messaging mods")
-#            r.send_message("/r/" + subreddit.display_name, "Unactioned Modqueue Item", "Attention - a modqueue item hasn't been actioned for 4 hours. Please review it asap!\n\nhttps://www.reddit.com/r/asmr/about/modqueue/")
-#    return schedule.CancelJob
+def check_old_mod_queue_item(): #tested - works
+    submission = unactioned_modqueue.get()
+    modqueue = list(subreddit.mod.modqueue())
+    for item in modqueue:
+        if item.id == submission.id:
+            print("Modqueue item unactioned for 4 hours - messaging mods")
+            subject = "Unactioned Modqueue Item (bot v5.0)"
+            message = "Attention - a modqueue item hasn't been actioned for 4 hours. Please review it asap!\n\nhttps://www.reddit.com/r/asmr/about/modqueue/"
+            subreddit.message(subject=subject, message=message)
+    return schedule.CancelJob
 
-#def check_comments():
-#    global first_run
-#    global seen_objects
-#    global user_submission_data
-#    global recent_video_data # shouldn't really need these but seems not to work on linux without them
+def check_comments():
+    global first_run
+    global seen_objects
+    global user_submission_data
+    global recent_video_data # shouldn't really need these but seems not to work on linux without them
 
-#    limit = first_run_backcheck if first_run else 6
+    limit = first_run_backcheck if first_run else 6
 
-#    comments = list(subreddit.get_comments(limit=limit)) # sends request
+    comments = list(subreddit.comments(limit=limit)) # sends request  
 
-#    for comment in comments:
-#        if comment.id not in seen_objects["comments"]:
-#            seen_comments = seen_objects["comments"]
-#            seen_comments.append(comment.id)
-#            seen_objects["comments"] = seen_comments
-#            seen_objects.sync()
+    for comment in comments:
+        if comment.id not in seen_objects["comments"]:
+            """seen_comments = seen_objects["comments"]
+            seen_comments.append(comment.id)
+            seen_objects["comments"] = seen_comments
+            seen_objects.sync()"""
 
-#            try:
-#                comment_author = comment.author.name.lower()
-#                comment_body = comment.body.lower()
+            try:
+                comment_author = comment.author.name.lower()
+                comment_body = comment.body.lower()
 
-#                # public commands:
-#                if any(comment_body == x for x in ["ayy", "ayyy", "ayyyy", "ayyyyy"]):
-#                    print("Responding to ayy by /u/" + comment_author)
-#                    comment.reply("lmao").distinguish()
-#                    continue
+                # public commands:
+                if any(comment_body == x for x in ["ayy", "ayyy", "ayyyy", "ayyyyy"]):
+                    print("Responding to ayy by /u/" + comment_author)
+                    comment.reply("lmao").mod.distinguish()
+                    continue
 
 #                if comment_author != "asmr_bot":
 #                    reply = link_youtube_channel(comment_body)
@@ -234,99 +242,87 @@ def check_mod_queue():
 #                        comment.reply(reply).distinguish()
 #                        continue # don't carry out further checks
                     
-#                # moderator commands
-#                if (comment_author in mod_list) and comment.banned_by is None: #if mod comment not removed..
-#                    if "!meta" == comment_body[:5]:
-#                        print("Removed submission in response to " + comment_au00000thor + " (bad meta post)")
-#                        remove_mod_comment(comment)
-#                        submission_id = comment.parent_id
-#                        submission = r.get_submission(submission_id=submission_id[3:])
-#                        submission.remove(False)
-#                        submission.add_comment(meta_explain.format(mod=comment_author)).distinguish(sticky=True)
-#                    elif "!music" == comment_body[:6]:
-#                        print("Removed submission in response to " + comment_author + " (music)")
-#                        remove_mod_comment(comment)
-#                        submission_id = comment.parent_id
-#                        submission = r.get_submission(submission_id=submission_id[3:])
-#                        submission.remove(False)
-#                        submission.add_comment(mus_explain.format(mod=comment_author)).distinguish(sticky=True)
-#                    elif "!title" == comment_body[:6]:
-#                        print("Removed submission in response to " + comment_author + " (bad title)")
-#                        remove_mod_comment(comment)
-#                        submission_id = comment.parent_id
-#                        submission = r.get_submission(submission_id=submission_id[3:])
-#                        submission.remove(False)
-#                        submission.add_comment(mod_title_explain.format(mod=comment_author)).distinguish(sticky=True)
-#                    elif "!warning" == comment_body[:8]:
-#                        reason = comment_body[9:]
-#                        remove_mod_comment(comment)
-#                        parent = r.get_info(thing_id=comment.parent_id)
-#                        if not user_is_subreddit_banned(parent.author.name):
-#                            print("Removed post in response to " + comment_author + " (add warning)")
-#                            new_warning(parent, comment_author, reason, False)
-#                            parent.remove(False)
-#                        else:
-#                            print("Not adding warning in response to " + comment_author + " - user /u/" + parent.author.name + " is already banned.")
-#                            r.send_message(recipient=comment_author, subject="Warning not added", message="No warning ban for /u/" + parent.author.name + " was added because that user is already banned. Their comment and your command have been removed.")
-#                    elif "!remove" == comment_body[:7]:
-#                        print("Removed post in response to " + comment_author + " (remove by request)")
-#                        remove_mod_comment(comment)
-#                        parent = r.get_info(thing_id=comment.parent_id)
-#                        parent.remove(False)
-#                    elif "!purge" == comment_body[:6]:
-#                        print("Removed comment tree in response to " + comment_author + " (kill thread)")
-#                        try:
-#                            parent = r.get_info(thing_id=comment.parent_id)
-#                            if parent.fullname.startswith("t1"):# comment
-#                                parent.refresh()
-#                                purge_thread(parent)
-#                            else:
-#                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") # todo: wat
-                            
-#                            remove_mod_comment(comment)
-#                        except Exception as e:
-#                            print("Exception when purging comment tree - "+str(e)+"\nParent was " + parent.id)
-#                            # traceback.print_exc()
-#                            r.send_message(recipient=comment_author, subject="Failed command", message="Your purge command failed for an unknown reason. Your comment was removed.")
-#                        finally:
-#                            comment.remove(False)
-#                    elif "!ban" == comment_body[:4]:
-#                        reason = comment_body[5:]
-#                        if reason == "":
-#                            reason = "<No reason given>"
+                # moderator commands
+                if (comment_author in mod_list) and comment.banned_by is None: #if mod comment not removed..
+                    if comment_body[:5] == "!meta":
+                        print("Removing submission in response to " + comment_author + " (bad meta post)")
+                        remove_mod_comment(comment)
+                        submission = r.submission(id=comment.parent_id[3:]) #will break here if command is not top-level comment
+                        submission.mod.remove()
+                        submission.reply(meta_explain.format(mod=comment_author)).mod.distinguish()
+                    elif comment_body[:6] == "!music":
+                        print("Removing submission in response to " + comment_author + " (music)")
+                        remove_mod_comment(comment)
+                        submission = r.submission(id=comment.parent_id[3:])
+                        submission.mod.remove()
+                        submission.reply(mus_explain.format(mod=comment_author)).mod.distinguish()
+                    elif comment_body[:6] == "!title":
+                        print("Removing submission in response to " + comment_author + " (music)")
+                        remove_mod_comment(comment)
+                        submission = r.submission(id=comment.parent_id[3:])
+                        submission.mod.remove()
+                        submission.reply(mod_title_explain.format(mod=comment_author)).mod.distinguish()
+                    elif comment_body[:7] == "!remove":
+                        print("Removing submission in response to " + comment_author + " (remove by command)")
+                        remove_mod_comment(comment)
+                        submission = r.submission(id=comment.parent_id[3:])
+                        submission.mod.remove()
+                    elif comment_body[:8] == "!warning":
+                        reason = comment_body[9:]
+                        remove_mod_comment(comment)
+                        parent = r.submission(id=comment.parent_id)
+                        if not user_is_subreddit_banned(parent.author.name):
+                            print("Removing post in response to " + comment_author + " (add warning)")
+                            new_warning(parent, comment_author, reason, False)
+                            parent.mod.remove()
+                        else:
+                            print("Not adding warning in response to " + comment_author + " - user /u/" + parent.author.name + " is already banned.")
+                            r.send_message(recipient=comment_author, subject="Warning not added", message="No warning ban for /u/" + parent.author.name + " was added because that user is already banned. Their comment and your command have been removed.")
 
-#                        parent = r.get_info(thing_id=comment.parent_id)
-#                        ban_user = parent.author.name
-#                        msg = "You have been automatically banned for [your post here]({link}). The moderator who banned you provided the following reason: **{reason}**"
+                    elif "!purge" == comment_body[:6]:
+                        print("Removing comment tree in response to " + comment_author + " (kill thread)")
+                        try:
+                            parent = r.submission(id=comment.parent_id)
+                            if parent.fullname[:2] == "t1":# comment
+                                parent.refresh()
+                                purge_thread(parent)
+                            else:
+                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") # todo: wat
+                           
+                            remove_mod_comment(comment)
+                        except Exception as e:
+                            print("Exception when purging comment tree - "+str(e)+"\nParent was " + parent.id)
+                            # traceback.print_exc()
+                            r.send_message(recipient=comment_author, subject="Failed command", message="Your purge command failed for an unknown reason. Your comment was removed.")
+                        finally:
+                            comment.mod.remove()
+                    elif "!ban" == comment_body[:4]:
+                        reason = comment_body[5:]
+                        if reason == "":
+                            reason = "<No reason given>"
 
-#                        try:
-#                            print("Banning user {ban_user} for post {post}: {reason}".format(ban_user=ban_user, post=parent.id, reason=reason))
-#                            parent.remove(False)
-#                            remove_mod_comment(comment)
+                        parent = r.submission(id=comment.parent_id)
+                        ban_user = parent.author.name
+                        msg = "You have been banned by {mod} for [your post here]({link}). The moderator who banned you provided the following reason: **{reason}**"
+
+                        try:
+                            print("Banning user {ban_user} for post {post}: {reason}".format(ban_user=ban_user, post=parent.id, reason=reason))
+                            parent.remove(False)
+                            remove_mod_comment(comment)
                         
-#                            note = comment.author.name + ": " + reason + ": " + parent.permalink
-#                            subreddit.add_ban(ban_user, note=note, ban_message=msg.format(link=parent.permalink, reason=reason))
+                            note = comment.author.name + ": " + reason + ": " + parent.permalink
+                            subreddit.add_ban(ban_user, note=note, ban_message=msg.format(mod=comment.author.name, link=parent.permalink, reason=reason))
 
-#                            message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\> {reason} \n\n Ban list: /r/asmr/about/banned"
+                            message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\> {reason} \n\n Ban list: /r/asmr/about/banned"
 
-#                            r.send_message(recipient=comment_author, subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
-#                        except PermissionError:
-#                            pass #tried to ban a mod. No banana. don't worry about it.
+                            r.send_message(recipient=comment_author, subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
+                        except PermissionError: #probably won't work in PRAW5 TODO
+                            pass #tried to ban a mod. No banana. don't worry about it.
 
-#            except AttributeError as ex: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
-#                print("Attribute Error! Comment was probably deleted. Comment was " + str(comment.fullname))
-#                print(str(ex))
-#                # traceback.print_exc()
-
-#def remove_mod_comment(comment):
-#    """If comment was made by me, I have the authentication to delete it, which is preferred. 
-#    Otherwise Remove it since I can't delete other mods' comments
-#    """
-#    if comment.author.name == "theonefoster":
-#        my_comment = tof.get_info(thing_id = comment.fullname)
-#        my_comment.delete()
-#    else:
-#        comment.remove(False)
+            except AttributeError as ex: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
+                print("Attribute Error! Comment was probably deleted. Comment was " + str(comment.fullname))
+                print(str(ex))
+                # traceback.print_exc()
     
 #def check_submissions():
 #    global first_run
@@ -567,6 +563,34 @@ def check_mod_queue():
 #            pass
 #        finally:
 #            message.mark_as_read()
+
+def remove_mod_comment(comment):
+    """If comment was made by me, I have the authentication to delete it, which is preferred. 
+    Otherwise Remove it since I can't delete other mods' comments
+    """
+    if comment.author.name == "theonefoster":
+        my_comment = tof.comment(id = comment.id)
+        my_comment.delete()
+    else:
+        comment.mod.remove()
+
+def remove_submission(submission):
+    mod_sub = praw.models.reddit.submission.SubmissionModeration(submission)
+    mod_sub.remove()
+
+def remove_comment(comment):
+    mod_comment = praw.models.reddit.comment.CommentModeration(comment)
+    mod_comment.remove()
+
+def remove_post(post):
+    "Removes a reddit object when it may be either a Comment or a Submission"
+    
+    if post.fullname[:2] == "t1": #post is a comment
+        remove_comment(post)
+    elif post.fullname[:2] == "t3":
+        remove_submission(post)
+    else:
+        raise TypeError("Attempted to remove a reddit object that is not a Comment or Submission")
 
 #def link_youtube_channel(comment):
 #    m = re.compile("\[\[([^\]]*)\]\]")
@@ -975,9 +999,9 @@ def check_mod_queue():
 #    return False
 
 def asmr_bot():
-#    schedule.run_pending()
+    schedule.run_pending()
 #    check_submissions()
-#    check_comments()
+    check_comments()
 #    check_messages()
     check_mod_queue()
 
@@ -988,10 +1012,8 @@ def asmr_bot():
 r = praw.Reddit("asmr_bot")
 print("Logged in as ", end="")
 print(r.user.me())
-subreddit = r.subreddit("asmr")
+subreddit = r.subreddit("asmrmodtalk")
 #lounge = r.subreddit("asmrcreatorlounge")
-
-check_mod_queue()
 
 if __name__ == "__main__":
     tof = praw.Reddit("theonefoster")
@@ -1017,6 +1039,7 @@ if __name__ == "__main__":
     while True:
         try:
             asmr_bot()
+            time.sleep(5)
 #        except praw.errors.HTTPException as e:
 #            try:
 #                print("HTTP Exception: " + str(e))
