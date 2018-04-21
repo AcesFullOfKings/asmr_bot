@@ -16,7 +16,6 @@ import queue
 import schedule
 
 import asmr_bot_data as d # d for data
-" works in bot_5 // import theonefoster_bot # used to delete subreddit reply commands"
 
 class my_submission_type():
     sub_permalink = ""
