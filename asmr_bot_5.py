@@ -263,18 +263,15 @@ def check_comments():
                             submission = r.submission(id=comment.parent_id[3:])
                             submission.mod.remove()
                             submission.reply(mod_title_explain.format(mod=comment_author)).mod.distinguish()
-                    elif comment_body.startswith("!remove"):
+                    if comment_body.startswith("!remove"):
                         print("Removing submission in response to " + comment_author + " (remove by command)")
                         remove_mod_comment(comment)
-                        if comment.parent_id[:2] == "t1": #comment
-                            parent = r.comment(id=comment.parent_id[3:])
-                        elif comment.parent_id[:2] == "t3": #submission
-                            parent = r.submission(id=comment.parent_id[3:])
+                        parent = get_parent(comment)
                         parent.mod.remove()
                     elif comment_body.startswith("!warning"):
                         reason = comment_body[9:]
                         remove_mod_comment(comment)
-                        parent = r.submission(id=comment.parent_id)
+                        parent = get_parent(comment)
                         if not user_is_subreddit_banned(parent.author.name):
                             # comment_author is mod who is giving the warning
                             print("Removing post in response to " + comment_author + " (add warning)")
@@ -287,7 +284,7 @@ def check_comments():
                     elif comment_body.startswith("!purge"):
                         print("Removing comment tree in response to " + comment_author + " (kill thread)")
                         try:
-                            parent = r.submission(id=comment.parent_id)
+                            parent = get_parent(comment)
                             if parent.fullname[:2] == "t1":# comment
                                 parent.refresh()
                                 purge_thread(parent)
@@ -306,10 +303,7 @@ def check_comments():
                         if reason == "":
                             reason = "<No reason given>"
 
-                        if comment.parent_id[:2] == "t1": #comment
-                            parent = r.comment(id=comment.parent_id[3:])
-                        elif comment.parent_id[:2] == "t3": #submission
-                            parent = r.submission(id=comment.parent_id[3:])
+                        parent = get_parent(comment)
 
                         ban_user = parent.author.name
                         msg = "You have been banned by {mod} for [your post here]({link}). The moderator who banned you provided the following reason:\n\n**{reason}**"
@@ -593,6 +587,16 @@ def remove_mod_comment(comment):
         my_comment.delete() #delete comment while authenticated as u/theonefoster
     else:
         comment.mod.remove()
+
+def get_parent(comment):
+    """Returns the parent comment or submission of a given comment"""
+
+    if comment.parent_id[:2] == "t1": #comment
+        return r.comment(id=comment.parent_id[3:])
+    elif comment.parent_id[:2] == "t3": #submission
+        return r.submission(id=comment.parent_id[3:])
+    else:
+        return None
 
 #def link_youtube_channel(comment):
 #    TODO: do a youtube search for the channel rather than a lookup
@@ -993,12 +997,11 @@ def update_warnings_wiki():
 
     subreddit.wiki["warnings"].edit(page)
 
-#def user_is_subreddit_banned(username):
-#    for u in r.get_banned(subreddit="asmr", user_only=False):
-#        if username.lower() == u["name"].name.lower(): 
-#            return True
-    
-#    return False
+def user_is_subreddit_banned(username): #tested, works
+    banned = subreddit.banned()
+    names = [user.name.lower() for user in banned]
+
+    return username.lower() in names
 
 def asmr_bot():
     schedule.run_pending()
@@ -1016,6 +1019,17 @@ print("Logged in as ", end="")
 print(r.user.me())
 subreddit = r.subreddit("asmrmodtalk")
 #lounge = r.subreddit("asmrcreatorlounge")
+
+## TEST CODE GOES HERE
+
+print(user_is_subreddit_banned("hi_hi_wuu2_nmu_nm"))
+print(user_is_subreddit_banned("sezvek"))
+
+input()
+exit()
+
+## END OF TEST CODE
+
 
 if __name__ == "__main__":
     tof = praw.Reddit("theonefoster")
