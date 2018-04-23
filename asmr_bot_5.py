@@ -301,26 +301,30 @@ def check_comments():
                             r.send_message(recipient=comment_author, subject="Failed command", message="Your purge command failed for an unknown reason. Your comment was removed.")
                         finally:
                             comment.mod.remove()
-                    elif "!ban" == comment_body[:4]:
+                    elif comment_body.startswith("!ban"):
                         reason = comment_body[5:]
                         if reason == "":
                             reason = "<No reason given>"
 
-                        parent = r.submission(id=comment.parent_id)
+                        if comment.parent_id[:2] == "t1": #comment
+                            parent = r.comment(id=comment.parent_id[3:])
+                        elif comment.parent_id[:2] == "t3": #submission
+                            parent = r.submission(id=comment.parent_id[3:])
+
                         ban_user = parent.author.name
-                        msg = "You have been banned by {mod} for [your post here]({link}). The moderator who banned you provided the following reason: **{reason}**"
+                        msg = "You have been banned by {mod} for [your post here]({link}). The moderator who banned you provided the following reason:\n\n**{reason}**"
 
                         try:
-                            print("Banning user {ban_user} for post {post}: {reason}".format(ban_user=ban_user, post=parent.id, reason=reason))
-                            parent.remove(False)
+                            print("Banning user {ban_user} for post {post}. Reason give: ""{reason}""".format(ban_user=ban_user, post=parent.id, reason=reason))
+                            parent.mod.remove(False)
                             remove_mod_comment(comment)
                         
                             note = comment.author.name + ": " + reason + ": " + parent.permalink
-                            subreddit.add_ban(ban_user, note=note, ban_message=msg.format(mod=comment.author.name, link=parent.permalink, reason=reason))
+                            subreddit.banned.add(redditor=ban_user, note=note, ban_message=msg.format(mod=comment.author.name, link=parent.permalink, reason=reason))
 
                             message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\> {reason} \n\n Ban list: /r/asmr/about/banned"
 
-                            r.send_message(recipient=comment_author, subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
+                            r.redditor(comment_author).message(subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
                         except PermissionError:
                             r.send_message(recipient=comment_author, subject="Ban failed", message="You issued a command [here]({link}) in which you tried to ban a moderator, which is not possible.".format(link=comment.permalink))
                         except praw.exceptions.APIException as ex:
@@ -1012,12 +1016,6 @@ print("Logged in as ", end="")
 print(r.user.me())
 subreddit = r.subreddit("asmrmodtalk")
 #lounge = r.subreddit("asmrcreatorlounge")
-
-try:
-    subreddit.banned.add("theonefoster")
-except Exception as ex:
-    print(ex.message)
-
 
 if __name__ == "__main__":
     tof = praw.Reddit("theonefoster")
