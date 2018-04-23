@@ -189,7 +189,7 @@ def check_mod_queue(): #tested - works
                 message = "The modqueue has multiple unactioned items in it - please review them asap! \n\n https://www.reddit.com/r/asmr/about/modqueue/"
                 subreddit.message(subject=subject, message=message)
                 modqueue_is_full = True
-            elif len(modqueue) <=2:
+            elif len(modqueue) <=3:
                 modqueue_is_full = False
 
 def check_old_mod_queue_item(): #tested - works
@@ -215,10 +215,10 @@ def check_comments():
 
     for comment in comments:
         if comment.id not in seen_objects["comments"]:
-            """seen_comments = seen_objects["comments"]
+            seen_comments = seen_objects["comments"]
             seen_comments.append(comment.id)
             seen_objects["comments"] = seen_comments
-            seen_objects.sync()"""
+            seen_objects.sync()
 
             try:
                 comment_author = comment.author.name.lower()
@@ -243,34 +243,40 @@ def check_comments():
                     
                 # moderator commands
                 if (comment_author in mod_list) and comment.banned_by is None: #if mod comment not removed..
-                    if comment_body[:5] == "!meta":
-                        print("Removing submission in response to " + comment_author + " (bad meta post)")
-                        remove_mod_comment(comment)
-                        submission = r.submission(id=comment.parent_id[3:]) #will break here if command is not top-level comment
-                        submission.mod.remove()
-                        submission.reply(meta_explain.format(mod=comment_author)).mod.distinguish()
-                    elif comment_body[:6] == "!music":
-                        print("Removing submission in response to " + comment_author + " (music)")
-                        remove_mod_comment(comment)
-                        submission = r.submission(id=comment.parent_id[3:])
-                        submission.mod.remove()
-                        submission.reply(mus_explain.format(mod=comment_author)).mod.distinguish()
-                    elif comment_body[:6] == "!title":
-                        print("Removing submission in response to " + comment_author + " (music)")
-                        remove_mod_comment(comment)
-                        submission = r.submission(id=comment.parent_id[3:])
-                        submission.mod.remove()
-                        submission.reply(mod_title_explain.format(mod=comment_author)).mod.distinguish()
-                    elif comment_body[:7] == "!remove":
+                    if comment.is_root:
+                        #commands which can only be used at the top-level (as comments in reply to submissions)
+                        if comment_body.startswith("!meta"):
+                            print("Removing submission in response to " + comment_author + " (bad meta post)")
+                            remove_mod_comment(comment)
+                            submission = r.submission(id=comment.parent_id[3:]) #will break here if command is not top-level comment
+                            submission.mod.remove()
+                            submission.reply(meta_explain.format(mod=comment_author)).mod.distinguish()
+                        elif comment_body.startswith("!music"):
+                            print("Removing submission in response to " + comment_author + " (music)")
+                            remove_mod_comment(comment)
+                            submission = r.submission(id=comment.parent_id[3:])
+                            submission.mod.remove()
+                            submission.reply(mus_explain.format(mod=comment_author)).mod.distinguish()
+                        elif comment_body.startswith("!title"):
+                            print("Removing submission in response to " + comment_author + " (bad title)")
+                            remove_mod_comment(comment)
+                            submission = r.submission(id=comment.parent_id[3:])
+                            submission.mod.remove()
+                            submission.reply(mod_title_explain.format(mod=comment_author)).mod.distinguish()
+                    elif comment_body.startswith("!remove"):
                         print("Removing submission in response to " + comment_author + " (remove by command)")
                         remove_mod_comment(comment)
-                        submission = r.submission(id=comment.parent_id[3:])
-                        submission.mod.remove()
-                    elif comment_body[:8] == "!warning":
+                        if comment.parent_id[:2] == "t1": #comment
+                            parent = r.comment(id=comment.parent_id[3:])
+                        elif comment.parent_id[:2] == "t3": #submission
+                            parent = r.submission(id=comment.parent_id[3:])
+                        parent.mod.remove()
+                    elif comment_body.startswith("!warning"):
                         reason = comment_body[9:]
                         remove_mod_comment(comment)
                         parent = r.submission(id=comment.parent_id)
                         if not user_is_subreddit_banned(parent.author.name):
+                            # comment_author is mod who is giving the warning
                             print("Removing post in response to " + comment_author + " (add warning)")
                             new_warning(parent, comment_author, reason, False)
                             parent.mod.remove()
@@ -278,7 +284,7 @@ def check_comments():
                             print("Not adding warning in response to " + comment_author + " - user /u/" + parent.author.name + " is already banned.")
                             r.send_message(recipient=comment_author, subject="Warning not added", message="No warning ban for /u/" + parent.author.name + " was added because that user is already banned. Their comment and your command have been removed.")
 
-                    elif "!purge" == comment_body[:6]:
+                    elif comment_body.startswith("!purge"):
                         print("Removing comment tree in response to " + comment_author + " (kill thread)")
                         try:
                             parent = r.submission(id=comment.parent_id)
@@ -315,8 +321,19 @@ def check_comments():
                             message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\> {reason} \n\n Ban list: /r/asmr/about/banned"
 
                             r.send_message(recipient=comment_author, subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
-                        except PermissionError: #probably won't work in PRAW5 TODO
-                            pass #tried to ban a mod. No banana. don't worry about it.
+                        except PermissionError:
+                            r.send_message(recipient=comment_author, subject="Ban failed", message="You issued a command [here]({link}) in which you tried to ban a moderator, which is not possible.".format(link=comment.permalink))
+                        except praw.exceptions.APIException as ex:
+                            if ex.error_type == "CANT_RESTRICT_MODERATOR":
+                                r.send_message(recipient=comment_author, subject="Ban failed", message="You issued a command [here]({link}) in which you tried to ban a moderator, which is not possible.".format(link=comment.permalink))
+                            else:
+                                raise #act as if the exception was never caught here
+                    else:
+                        if any(comment_body.startswith(command) for command in ["!meta", "!music", "!title"]):
+                            print("Invalid command from " + comment_author + " - submission command in reply to comment.")
+                            r.redditor(comment.author.name).message(subject="Invalid bot command", message="You issued a command [here]({link}) in reply to a comment, but that command can only be used in reply to a submission. Please re-issue the command as a top-level comment.".format(link=comment.permalink))
+                            remove_mod_comment(comment)
+                       
 
             except AttributeError as ex: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
                 print("Attribute Error! Comment was probably deleted. Comment was " + str(comment.fullname))
@@ -568,30 +585,13 @@ def remove_mod_comment(comment):
     Otherwise Remove it since I can't delete other mods' comments
     """
     if comment.author.name == "theonefoster":
-        my_comment = tof.comment(id = comment.id)
-        my_comment.delete()
+        my_comment = tof.comment(id = comment.id) #re-fetch the comment with my personal credentials
+        my_comment.delete() #delete comment while authenticated as u/theonefoster
     else:
         comment.mod.remove()
 
-def remove_submission(submission):
-    mod_sub = praw.models.reddit.submission.SubmissionModeration(submission)
-    mod_sub.remove()
-
-def remove_comment(comment):
-    mod_comment = praw.models.reddit.comment.CommentModeration(comment)
-    mod_comment.remove()
-
-def remove_post(post):
-    "Removes a reddit object when it may be either a Comment or a Submission"
-    
-    if post.fullname[:2] == "t1": #post is a comment
-        remove_comment(post)
-    elif post.fullname[:2] == "t3":
-        remove_submission(post)
-    else:
-        raise TypeError("Attempted to remove a reddit object that is not a Comment or Submission")
-
 #def link_youtube_channel(comment):
+#    TODO: do a youtube search for the channel rather than a lookup
 #    m = re.compile("\[\[([^\]]*)\]\]")
 #    matches = re.findall(m, comment)
 #    channels = {}
@@ -688,90 +688,90 @@ def remove_post(post):
 #    except praw.errors.InvalidSubmission:
 #        return True
 
-#def new_warning(post, banning_mod, reason="", spam_warning=False):
-#    user = post.author.name.lower()
+def new_warning(post, banning_mod, reason="", spam_warning=False):
+    user = post.author.name.lower()
 
-#    if type(banning_mod) != type(""):
-#        raise TypeError("banning_mod must be of type string")
+    if type(banning_mod) != type(""):
+        raise TypeError("banning_mod must be of type string")
     
-#    if user in mod_list:
-#        raise PermissionError("error on ban attempt - cannot ban moderator " + post.author.name)
+    if user in mod_list:
+        raise PermissionError("error on ban attempt - cannot ban moderator " + post.author.name)
 
-#    if spam_warning:
-#        msg_intro = "You have received an automatic warning ban for spamming links to a youtube channel after your post [here]({link}). \n\n"
-#    else:
-#        msg_intro = "You have received an automatic warning ban because of your post [here]({link}). \n\n"
+    if spam_warning:
+        msg_intro = "You have received an automatic warning ban for spamming links to a youtube channel after your post [here]({link}). \n\n"
+    else:
+        msg_intro = "You have received an automatic warning ban because of your post [here]({link}). \n\n"
 
-#    if reason != "":
-#        reason_text = "**The moderator who invoked this ban, /u/{mod}, gave the following reason: \"" + reason + "\"**\n\n "
-#    else:
-#        reason_text = "**The moderator who invoked this ban, /u/{mod}, did not provide a reason for the ban.**\n\n "
-#        if spam_warning:
-#            reason = "spam"
-#        else:
-#            reason = "<No reason provided>"
+    if reason != "":
+        reason_text = "**The moderator who invoked this ban, /u/{mod}, gave the following reason: \"" + reason + "\"**\n\n "
+    else:
+        reason_text = "**The moderator who invoked this ban, /u/{mod}, did not provide a reason for the ban.**\n\n "
+        if spam_warning:
+            reason = "spam"
+        else:
+            reason = "<No reason provided>"
 
-#    link = ""
-#    if "t3" in post.fullname[:2]: # submission
-#        note = banning_mod + " - " + reason + " - " + post.short_link
-#        link = post.short_link
-#    else: # comment
-#        note = banning_mod + " - " + reason + " - " + post.permalink
-#        link = post.permalink
+    link = ""
+    if "t3" in post.fullname[:2]: # submission
+        note = banning_mod + " - " + reason + " - " + post.short_link
+        link = post.short_link
+    else: # comment
+        note = banning_mod + " - " + reason + " - " + post.permalink
+        link = post.permalink
 
-#    msg_intro = msg_intro.format(link=link)
-#    reason_text = reason_text.format(mod=banning_mod)
+    msg_intro = msg_intro.format(link=link)
+    reason_text = reason_text.format(mod=banning_mod)
 
-#    #at this point, got user, note, link, msg_intro, reason_text. Need number of previous bans, so..
+    #at this point, got user, note, link, msg_intro, reason_text. Need number of previous bans, so..
 
-#    warnings_cursor.execute("SELECT * FROM warnings WHERE name=?", [user])
-#    db_result = warnings_cursor.fetchall()
+    warnings_cursor.execute("SELECT * FROM warnings WHERE name=?", [user])
+    db_result = warnings_cursor.fetchall()
 
-#    has_spam_warning = False
-#    previous_bans = 0
+    has_spam_warning = False
+    previous_bans = 0
 
-#    for ban in db_result: #count number of previous bans (excluding one spam ban)
-#        if ban[3] == "spam":
-#            if not has_spam_warning:
-#                has_spam_warning = True
-#            else:
-#                previous_bans += 1
-#        else:
-#            previous_bans += 1
+    for ban in db_result: #count number of previous bans (excluding one spam ban)
+        if ban[3] == "spam":
+            if not has_spam_warning:
+                has_spam_warning = True
+            else:
+                previous_bans += 1
+        else:
+            previous_bans += 1
 
-#    spam_warning_added = False
-#    ban_number = None
-#    if spam_warning:
-#        if previous_bans == 0 and has_spam_warning == False:
-#            #add zeroeth warning
-#            reason_text = ""
-#            description = "This warning is to give you an opportunity to read the subreddit and site-wide rules on self-promotion and spam.\n\nThis is your soft warning, which is accompanied by a 1-day subreddit ban. Please take 2 minutes to read our subreddit rules before participating in the community again.".format(link=link)
-#            duration = 1
-#            spam_warning_added = True
-#        else:
-#            spam_warning_added = False
+    spam_warning_added = False
+    ban_number = None
+    if spam_warning:
+        if previous_bans == 0 and has_spam_warning == False:
+            #add zeroeth warning
+            reason_text = ""
+            description = "This warning is to give you an opportunity to read the subreddit and site-wide rules on self-promotion and spam.\n\nThis is your soft warning, which is accompanied by a 1-day subreddit ban. Please take 2 minutes to read our subreddit rules before participating in the community again.".format(link=link)
+            duration = 1
+            spam_warning_added = True
+        else:
+            spam_warning_added = False
 
-#    if not spam_warning_added:
-#        if previous_bans == 0:
-#            description = "This is your first official warning, which is accompanied by a 7-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again. "
-#            if not spam_warning:
-#                description = description + "If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early."
-#            duration = 7
-#        elif previous_bans == 1:
-#            description = "**This is your final warning**, which is accompanied by a 30-day subreddit ban; if you receive another warning, you will be permanently banned. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again."
-#            duration = 30
-#        elif previous_bans >= 2:
-#            description = "This is your third warning, meaning you are now permanently banned."
-#            duration = None
+    if not spam_warning_added:
+        if previous_bans == 0:
+            description = "This is your first official warning, which is accompanied by a 7-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again. "
+            if not spam_warning:
+                description = description + "If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early."
+            duration = 7
+        elif previous_bans == 1:
+            description = "**This is your final warning**, which is accompanied by a 30-day subreddit ban; if you receive another warning, you will be permanently banned. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again."
+            duration = 30
+        elif previous_bans >= 2:
+            description = "This is your third warning, meaning you are now permanently banned."
+            duration = None
         
-#    ban_date = datetime.date.today()
-#    msg = msg_intro + reason_text + description
-#    print("Adding ban for user " + user + ". (reason: " + reason + ")")
-#    subreddit.add_ban(post.author, duration=duration, note=note, ban_message=msg)
-#    warnings_cursor.execute("INSERT INTO warnings VALUES(?,?,?,?,?)",  [user, link, banning_mod, reason, ban_date])
-#    warnings_db.commit()
-#    update_warnings_wiki()
-#    return duration
+    ban_date = datetime.date.today()
+    msg = msg_intro + reason_text + description
+    print("Adding ban for user " + user + ". (reason: " + reason + ")")
+    subreddit.banned.add(post.author, duration=duration, note=note, ban_message=msg)
+    warnings_cursor.execute("INSERT INTO warnings VALUES(?,?,?,?,?)",  [user, link, banning_mod, reason, ban_date])
+    warnings_db.commit()
+    update_warnings_wiki()
+    return duration
 
 #def is_bad_title(title):
 #    title = title.lower()
@@ -946,49 +946,48 @@ def remove_post(post):
 #        del(d)
 #        r.redditor("theonefoster").message(subject="Error getting banned channels", message="Exeption when getting banned channels!\n\n" + str(ex) + "\n\n /r/asmr/wiki/banned")
 
-#def update_warnings_wiki():
-#    warnings_cursor.execute("SELECT * FROM warnings")
-#    db_result = warnings_cursor.fetchall()
+def update_warnings_wiki():
+    warnings_cursor.execute("SELECT * FROM warnings")
+    db_result = warnings_cursor.fetchall()
 
-#    warned_users = dict()
+    warned_users = dict()
 
-#    for war in db_result:
-#        username, link, mod, reason, date = war
-#        if username not in warned_users:
-#            if reason == "spam":
-#                warned_users[username] = [(link, mod, reason, str(date), 0)]
-#            else:
-#                warned_users[username] = [(link, mod, reason, str(date), 1)]
-#        else:
-#            warnings = len(warned_users[username])
-#            bans = warned_users[username]
-#            ban_number = len(warned_users[username]) + 1
-#            bans.append((link, mod, reason, date, ban_number))
-#            warned_users[username] = bans
+    for war in db_result:
+        username, link, mod, reason, date = war
+        if username not in warned_users:
+            if reason == "spam":
+                warned_users[username] = [(link, mod, reason, str(date), 0)]
+            else:
+                warned_users[username] = [(link, mod, reason, str(date), 1)]
+        else:
+            warnings = len(warned_users[username])
+            bans = warned_users[username]
+            ban_number = len(warned_users[username]) + 1
+            bans.append((link, mod, reason, date, ban_number))
+            warned_users[username] = bans
 
-#    page = "Name | Post | Banned by | Reason given | Date banned | Status\n---|---|---|---|---|---\n"
+    page = "Name | Post | Banned by | Reason given | Date banned | Status\n---|---|---|---|---|---\n"
 
-#    for user in warned_users.keys():
-#        bans = warned_users[user]
-#        warnings = len(bans)
+    for user in warned_users.keys():
+        bans = warned_users[user]
+        warnings = len(bans)
 
-#        page = page + "/u/" + user
+        page = page + "/u/" + user
        
-#        for ban in bans:
-#            link, mod, reason, date, ban_number = ban
-#            if ban_number == 0:
-#                status = "Spam warning"
-#            elif ban_number == 1:
-#                status = "First warning"
-#            elif ban_number == 2:
-#                status = "LAST warning"
-#            else:
-#                status = "Permanent"
+        for ban in bans:
+            link, mod, reason, date, ban_number = ban
+            if ban_number == 0:
+                status = "Spam warning"
+            elif ban_number == 1:
+                status = "First warning"
+            elif ban_number == 2:
+                status = "LAST warning"
+            else:
+                status = "Permanent"
 
-#            page = page + " | " + link + " | " + "/u/" + mod + " | " + reason + " | " + str(date) + " | " + status + "\n"
+            page = page + " | " + link + " | " + "/u/" + mod + " | " + reason + " | " + str(date) + " | " + status + "\n"
 
-
-#    r.edit_wiki_page("asmr", "warnings", page)
+    subreddit.wiki["warnings"].edit(page)
 
 #def user_is_subreddit_banned(username):
 #    for u in r.get_banned(subreddit="asmr", user_only=False):
@@ -1013,6 +1012,12 @@ print("Logged in as ", end="")
 print(r.user.me())
 subreddit = r.subreddit("asmrmodtalk")
 #lounge = r.subreddit("asmrcreatorlounge")
+
+try:
+    subreddit.banned.add("theonefoster")
+except Exception as ex:
+    print(ex.message)
+
 
 if __name__ == "__main__":
     tof = praw.Reddit("theonefoster")
