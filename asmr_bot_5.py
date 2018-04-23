@@ -275,11 +275,11 @@ def check_comments():
                         if not user_is_subreddit_banned(parent.author.name):
                             # comment_author is mod who is giving the warning
                             print("Removing post in response to " + comment_author + " (add warning)")
-                            new_warning(parent, comment_author, reason, False)
                             parent.mod.remove()
+                            new_warning(parent, comment_author, reason, False)
                         else:
                             print("Not adding warning in response to " + comment_author + " - user /u/" + parent.author.name + " is already banned.")
-                            r.send_message(recipient=comment_author, subject="Warning not added", message="No warning ban for /u/" + parent.author.name + " was added because that user is already banned. Their comment and your command have been removed.")
+                            r.redditor(comment_author).message(subject="Warning not added", message="No warning ban for /u/" + parent.author.name + " was added because that user is already banned. Their comment and your command have been removed.")
 
                     elif comment_body.startswith("!purge"):
                         print("Removing comment tree in response to " + comment_author + " (kill thread)")
@@ -289,7 +289,7 @@ def check_comments():
                                 parent.refresh()
                                 purge_thread(parent)
                             else:
-                                r.send_message(recipient=comment_author, subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") # todo: wat
+                                r.redditor(comment_author).message(subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") # todo: wat
                            
                             remove_mod_comment(comment)
                         except Exception as e:
@@ -389,7 +389,7 @@ def check_comments():
 #                        elif video_is_unlisted(vid_id):
 #                            submission.remove(False)
 #                            submission.add_comment(unlisted_explain).distinguish(sticky=True)
-#                            print("Removed submission " + submission.short_link + " (unlisted video)")
+#                            print("Removed submission " + submission.shortlink + " (unlisted video)")
 #                            removed = True
 #                        elif vid_id in recent_video_data["videos"]: # submission is repost
 #                            my_old_post = recent_video_data["videos"][vid_id]
@@ -478,7 +478,7 @@ def check_comments():
 #                                    subs[submission.author.name] = l # update dict value
 #                                    user_submission_data["submissions"] = subs # write dict back to shelve 
 #                except Exception as ex:
-#                    print("exception on processing of submission " + submission.short_link + " - " + str(ex))
+#                    print("exception on processing of submission " + submission.shortlink + " - " + str(ex))
                     
 #                    if "ran out of input" in str(ex).lower():
 #                        break
@@ -703,30 +703,34 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
         raise TypeError("banning_mod must be of type string")
     
     if user in mod_list:
-        raise PermissionError("error on ban attempt - cannot ban moderator " + post.author.name)
+        raise PermissionError("Error on ban attempt - cannot ban moderator " + user)
+
+    if reason == "spam" and banning_mod != "asmr_bot": #only asmr_bot can give spam warnings, which are identified by the reason of "spam"
+        reason = "spamming"
 
     if spam_warning:
-        msg_intro = "You have received an automatic warning ban for spamming links to a youtube channel after your post [here]({link}). \n\n"
+        msg_intro = "You have received an automatic warning ban for spamming links to a youtube channel after your post [here]({link}).\n\n"
     else:
-        msg_intro = "You have received an automatic warning ban because of your post [here]({link}). \n\n"
+        msg_intro = "You have received an automatic warning ban because of your post [here]({link}).\n\n"
 
     if reason != "":
-        reason_text = "**The moderator who invoked this ban, /u/{mod}, gave the following reason: \"" + reason + "\"**\n\n "
+        reason_text = "The moderator who invoked this ban, /u/{mod}, gave the following reason: **\"" + reason + "\"**\n\n"
     else:
-        reason_text = "**The moderator who invoked this ban, /u/{mod}, did not provide a reason for the ban.**\n\n "
+        reason_text = "The moderator who invoked this ban, /u/{mod}, did not provide a reason for the ban.**\n\n"
         if spam_warning:
             reason = "spam"
         else:
             reason = "<No reason provided>"
 
     link = ""
-    if "t3" in post.fullname[:2]: # submission
-        note = banning_mod + " - " + reason + " - " + post.short_link
-        link = post.short_link
+    note = "{mod} - {reason} - {link}"
+
+    if "t3" == post.fullname[:2]: # submission
+        link = post.shortlink
     else: # comment
-        note = banning_mod + " - " + reason + " - " + post.permalink
         link = post.permalink
 
+    note = note.format(mod=banning_mod, reason=reason, link=link)
     msg_intro = msg_intro.format(link=link)
     reason_text = reason_text.format(mod=banning_mod)
 
@@ -759,11 +763,11 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
         else:
             spam_warning_added = False
 
-    if not spam_warning_added:
+    if not spam_warning_added: #could still be a spam warning if they've had a warning in the past
         if previous_bans == 0:
-            description = "This is your first official warning, which is accompanied by a 7-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again. "
+            description = "This is your first official warning, which is accompanied by a 7-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again."
             if not spam_warning:
-                description = description + "If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early."
+                description = description + " If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early."
             duration = 7
         elif previous_bans == 1:
             description = "**This is your final warning**, which is accompanied by a 30-day subreddit ban; if you receive another warning, you will be permanently banned. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again."
@@ -968,9 +972,9 @@ def update_warnings_wiki():
             else:
                 warned_users[username] = [(link, mod, reason, str(date), 1)]
         else:
-            warnings = len(warned_users[username])
             bans = warned_users[username]
-            ban_number = len(warned_users[username]) + 1
+
+            ban_number = len(bans) + 1
             bans.append((link, mod, reason, date, ban_number))
             warned_users[username] = bans
 
@@ -1022,11 +1026,9 @@ subreddit = r.subreddit("asmrmodtalk")
 
 ## TEST CODE GOES HERE
 
-print(user_is_subreddit_banned("hi_hi_wuu2_nmu_nm"))
-print(user_is_subreddit_banned("sezvek"))
 
-input()
-exit()
+#input()
+#exit()
 
 ## END OF TEST CODE
 
