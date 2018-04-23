@@ -25,10 +25,10 @@ class my_submission_type():
 
 # PRAW details, other imported data
 bad_title_phrases = d.bad_title_phrases
-# banned_channels = d.BANNED_CHANNELS
+banned_channels = d.BANNED_CHANNELS
 
 # gdata details
-#g_browser_key = d.g_browser_key
+g_browser_key = d.g_browser_key
 
 # global variables
 mod_list = {'theonefoster', 'nvadergir', 'mahi-mahi', 'asmr_bot', 'underscorewarrior', 'roflbbq', 'unicornica', 'automoderator'}
@@ -1025,11 +1025,8 @@ subreddit = r.subreddit("asmr")
 
 ###### TEST CODE GOES HERE
 
-c = get_banned_channels()
-print(banned_channels)
-
-input()
-exit()
+#input()
+#exit()
 
 ###### END OF TEST CODE
 
@@ -1037,8 +1034,8 @@ exit()
 if __name__ == "__main__":
     tof = praw.Reddit("theonefoster")
     
-#    print("Fetching banned channels..")
-#    get_banned_channels()
+    print("Fetching banned channels..")
+    get_banned_channels()
 
 #    schedule.every().thursday.at("23:50").do(remove_ffaf)
 #    schedule.every().wednesday.at("18:00").do(remove_tech_tuesday)
@@ -1048,45 +1045,45 @@ if __name__ == "__main__":
 #    schedule.every().day.at("02:00").do(clear_video_submissions) # once per day
 #    schedule.every(4).hours.do(get_banned_channels) # 6 times per day
 
-#    print("Updating submissions databases..")
-#    clear_user_submissions()
-#    update_seen_objects()
-#    clear_video_submissions()
+    print("Updating submissions databases..")
+    clear_user_submissions()
+    update_seen_objects()
+    clear_video_submissions()
 
     print("Setup complete. Starting bot duties.")
+
+    exponential_dropoff = 10
 
     while True:
         try:
             asmr_bot()
+            exponential_dropoff = 5
             time.sleep(5)
-#        except praw.errors.HTTPException as e:
-#            try:
-#                print("HTTP Exception: " + str(e))
-#                #traceback.print_exc()
-#                r = login()
-#            except Exception as f:
-#                print("Login failed: " + str(f))
-#                print ("Sleeping....")
-#                time.sleep(30)
+        except prawcore.exceptions.ServerError as e:
+            try:
+                print("Server Exception: " + str(e))
+                #traceback.print_exc()
+                time.sleep(exponential_dropoff) #usually 503 so just try again soon
+                exponential_dropoff *= 3
         except Exception as e:
             print("Unknown exception: " + str(e))
             traceback.print_exc()
             print("Sleeping..")
             time.sleep(30) # usually 503. Sleeping reduces reddit load.
-#        finally:
+        finally:
 
-#            recent_video_data.sync()
-#            user_submission_data.sync()
-#            seen_objects.sync()
+            recent_video_data.sync()
+            user_submission_data.sync()
+            seen_objects.sync()
 
-#            recent_video_data.close()
-#            user_submission_data.close()
-#            seen_objects.close()
+            recent_video_data.close()
+            user_submission_data.close()
+            seen_objects.close()
 
-#            user_submission_data = shelve.open("user_submission_data", "c") # all submissions from past day by author
-#            recent_video_data = shelve.open("recent_video_data", "c") # videos submitted over past 3 months
-#            seen_objects = shelve.open("seen_objects", "c") # track which objects have been seen
+            user_submission_data = shelve.open("user_submission_data", "c") # all submissions from past day by author
+            recent_video_data = shelve.open("recent_video_data", "c") # videos submitted over past 3 months
+            seen_objects = shelve.open("seen_objects", "c") # track which objects have been seen
 
-#            first_run = False
+            first_run = False
 
-#            time.sleep(5) # reduces reddit load and unnecessary processor usage
+            time.sleep(5) # reduces reddit load and unnecessary processor usage
