@@ -828,7 +828,6 @@ def title_is_caps(title):
     for word in words:
         tails.append(word[1:]) #Remove first letter of each word
 
-    normalised_title = ""
     normalised_title = "".join(word for word in tails) # merge words back together
     capitals = "".join(char for char in normalised_title if char.upper() == char) # copy only capitals
     
@@ -836,7 +835,6 @@ def title_is_caps(title):
         return True
     else:
         return False
-
 
 def is_banned_link(url):
     if (   (    ".youtube." in url 
@@ -847,7 +845,7 @@ def is_banned_link(url):
              or "/channel/" in url 
              or "/user/"    in url
            )
-       ): # sad
+       ): # sadface
         return True
     else:
         return False
@@ -903,61 +901,61 @@ def purge_thread(comment): #works
 #    except praw.errors.HTTPException as e: # if there's no sticky it'll throw a 404 Not Found
 #        pass
 
-#def clear_user_submissions():
-#    # user_submission_data is a dict containing usernames as keys and lists as values
-#    # Each user's dict value is a list of my_submission_type objects, representing 
-#    # every submission they've made in the last 24 hours
+def clear_user_submissions():
+    # user_submission_data is a dict containing usernames as keys and lists as values
+    # Each user's dict value is a list of my_submission_type objects, representing 
+    # every submission they've made in the last 24 hours
 
-#    submissions = user_submission_data["submissions"]
-#    users = list(submissions.keys())
+    submissions = user_submission_data["submissions"]
+    users = list(submissions.keys())
 
-#    for user in users:
-#        if user == "un" and len(users) > 2: # if database is reset, dummy data is inserted as a placeholder. Remove this.
-#            del submissions["un"] # "un" is an invalid reddit username so this is safe.
-#            continue
-#        submissions_by_user = submissions[user] 
-#        temp = list(submissions_by_user)
-#        for s in temp:
-#            if s.date_created < (time.time()-86400): # if the submission was over 24 hours ago
-#                submissions_by_user.remove(s) # remove it from the list
+    for user in users:
+        if user == "un" and len(users) > 2: # if database is reset, dummy data is inserted as a placeholder. Remove this.
+            del submissions["un"] # "un" is an invalid reddit username so this is safe.
+            continue
+        submissions_by_user = submissions[user] 
+        temp = list(submissions_by_user)
+        for s in temp:
+            if s.date_created < (time.time()-86400): # if the submission was over 24 hours ago
+                submissions_by_user.remove(s) # remove it from the list
 
-#        if len(submissions_by_user) == 0: # and if there are no submissions by that user in the past 24 hours
-#            del submissions[user] # remove the user's key from the dict       
-#        elif len(submissions[user]) != len(submissions_by_user):
-#                submissions[user] = submissions_by_user # update submissions log
+        if len(submissions_by_user) == 0: # and if there are no submissions by that user in the past 24 hours
+            del submissions[user] # remove the user's key from the dict       
+        elif len(submissions[user]) != len(submissions_by_user):
+                submissions[user] = submissions_by_user # update submissions log
 
-#    user_submission_data["submissions"] = submissions
+    user_submission_data["submissions"] = submissions
 
-#def update_seen_objects():
-#    done_submissions = seen_objects["submissions"][-100:] # trim to only 100 subs
-#    seen_objects["submissions"] = done_submissions
-#    done_comments = seen_objects["comments"][-100:] # trim to only 100 comments
-#    seen_objects["comments"] = done_comments
-#    seen_objects.sync()
+def update_seen_objects():
+    done_submissions = seen_objects["submissions"][-100:] # trim to only 100 subs
+    seen_objects["submissions"] = done_submissions
+    done_comments = seen_objects["comments"][-100:] # trim to only 100 comments
+    seen_objects["comments"] = done_comments
+    seen_objects.sync()
 
-#def clear_video_submissions():
-#    submissions_dict = recent_video_data["videos"]
+def clear_video_submissions():
+    submissions_dict = recent_video_data["videos"]
 
-#    dict_keys = list(submissions_dict.keys())
+    dict_keys = list(submissions_dict.keys())
     
-#    for key in dict_keys:
-#        if key == "id" and len(dict_keys) > 2:
-#            del submissions_dict[key]
-#        elif submissions_dict[key].date_created < (time.time() - 7948800): # if submission was more than 3 months ago
-#            del submissions_dict[key]
+    for key in dict_keys:
+        if key == "id" and len(dict_keys) > 2:
+            del submissions_dict[key]
+        elif submissions_dict[key].date_created < (time.time() - 7948800): # if submission was more than 3 months ago
+            del submissions_dict[key]
 
-#    recent_video_data["videos"] = submissions_dict
+    recent_video_data["videos"] = submissions_dict
 
-#def get_banned_channels(): #updated, not tested
-#    global banned_channels
-#    try:
-#        wiki = subreddit.wiki["banned"]
-#        banned_channels = eval(wiki.content_md)
-#    except Exception as ex:
-#        import asmr_bot_data as d # d for data
-#        banned_channels = d.BANNED_CHANNELS #fall back on known (but probably incomplete) list
-#        del(d)
-#        r.redditor("theonefoster").message(subject="Error getting banned channels", message="Exeption when getting banned channels!\n\n" + str(ex) + "\n\n /r/asmr/wiki/banned")
+def get_banned_channels(): #tesdted in bot_5, works
+    global banned_channels
+    try:
+        wiki = subreddit.wiki["banned"]
+        banned_channels = eval(wiki.content_md)
+    except Exception as ex:
+        import asmr_bot_data as d # d for data
+        banned_channels = d.BANNED_CHANNELS #fall back on known (but probably incomplete) list
+        del(d)
+        r.redditor("theonefoster").message(subject="Error getting banned channels", message="Exeption when getting banned channels!\n\n" + str(ex) + "\n\n /r/asmr/wiki/banned")
 
 def update_warnings_wiki():
     warnings_cursor.execute("SELECT * FROM warnings")
@@ -1022,16 +1020,18 @@ def asmr_bot():
 r = praw.Reddit("asmr_bot")
 print("Logged in as ", end="")
 print(r.user.me())
-subreddit = r.subreddit("asmrmodtalk")
+subreddit = r.subreddit("asmr")
 #lounge = r.subreddit("asmrcreatorlounge")
 
-## TEST CODE GOES HERE
+###### TEST CODE GOES HERE
 
+c = get_banned_channels()
+print(banned_channels)
 
-#input()
-#exit()
+input()
+exit()
 
-## END OF TEST CODE
+###### END OF TEST CODE
 
 
 if __name__ == "__main__":
