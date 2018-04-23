@@ -877,29 +877,18 @@ def purge_thread(comment): #works
         purge_thread(reply) # recursion is cool
     comment.mod.remove(False)
 
-#def remove_tech_tuesday(): # Called from schedule where parameters can't be used
-#    sticky = subreddit.get_sticky()
-#    try:
-#        if "Tech Tuesday" in sticky.title:
-#            sticky.unsticky()
-#        else:
-#            sticky = subreddit.get_sticky(bottom=True) # get second sticky
-#            if "Tech Tuesday" in sticky.title:
-#                sticky.unsticky()
-#    except praw.errors.HTTPException as e: # if there's no sticky it'll throw a 404 Not Found
-#        pass
-
-#def remove_ffaf(): # Called from schedule where parameters can't be used
-#    sticky = subreddit.get_sticky()
-#    try:
-#        if "Free-For-All Friday" in sticky.title:
-#            sticky.unsticky()
-#        else:
-#            sticky = subreddit.get_sticky(bottom=True) # get second sticky
-#            if "Free-For-All Friday" in sticky.title:
-#                sticky.unsticky()
-#    except praw.errors.HTTPException as e: # if there's no sticky it'll throw a 404 Not Found
-#        pass
+def remove_ffaf(): # called from schedule where parameters can't be used
+    #tested in bot_5, works
+    try:
+        sticky = subreddit.sticky()
+        if "Free-For-All Friday" in sticky.title:
+            sticky.mod.sticky(state=False)
+        else:
+            sticky = subreddit.sticky(number=2) # get second sticky
+            if "Free-For-All Friday" in sticky.title:
+                sticky.mod.sticky(state=False)
+    except prawcore.NotFound as e: # if there's no sticky it'll throw a 404 Not Found
+        pass
 
 def clear_user_submissions():
     # user_submission_data is a dict containing usernames as keys and lists as values
@@ -1020,7 +1009,7 @@ def asmr_bot():
 r = praw.Reddit("asmr_bot")
 print("Logged in as ", end="")
 print(r.user.me())
-subreddit = r.subreddit("asmr")
+subreddit = r.subreddit("asmrmodtalk")
 #lounge = r.subreddit("asmrcreatorlounge")
 
 ###### TEST CODE GOES HERE
@@ -1037,13 +1026,12 @@ if __name__ == "__main__":
     print("Fetching banned channels..")
     get_banned_channels()
 
-#    schedule.every().thursday.at("23:50").do(remove_ffaf)
-#    schedule.every().wednesday.at("18:00").do(remove_tech_tuesday)
+    schedule.every().thursday.at("23:50").do(remove_ffaf)
 #    schedule.every(14).days.at("03:00").do(update_top_submissions) # once per fortnight ish
-#    schedule.every().hour.do(clear_user_submissions)
-#    schedule.every().day.do(update_seen_objects)
-#    schedule.every().day.at("02:00").do(clear_video_submissions) # once per day
-#    schedule.every(4).hours.do(get_banned_channels) # 6 times per day
+    schedule.every().hour.do(clear_user_submissions)
+    schedule.every().day.do(update_seen_objects)
+    schedule.every().day.at("02:00").do(clear_video_submissions) # once per day
+    schedule.every(4).hours.do(get_banned_channels) # 6 times per day
 
     print("Updating submissions databases..")
     clear_user_submissions()
@@ -1065,11 +1053,11 @@ if __name__ == "__main__":
                 #traceback.print_exc()
                 time.sleep(exponential_dropoff) #usually 503 so just try again soon
                 exponential_dropoff *= 3
-        except Exception as e:
-            print("Unknown exception: " + str(e))
-            traceback.print_exc()
-            print("Sleeping..")
-            time.sleep(30) # usually 503. Sleeping reduces reddit load.
+            except Exception as e:
+                print("Unknown exception: " + str(e))
+                traceback.print_exc()
+                print("Sleeping..")
+                time.sleep(30) # usually 503. Sleeping reduces reddit load.
         finally:
 
             recent_video_data.sync()
