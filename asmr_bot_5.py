@@ -785,98 +785,99 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
     update_warnings_wiki()
     return duration
 
-#def is_bad_title(title):
-#    title = title.lower()
-#    if any(tag in title for tag in ["[intentional]", "[unintentional]", "[roleplay]", "[role play]"]):
-#        for phrase in bad_title_phrases:
-#            if phrase in title:
-#                return True
-#    return False
+def is_bad_title(title):
+    title = title.lower()
+    if any(tag in title for tag in ["[intentional]", "[unintentional]", "[roleplay]", "[role play]"]):
+        for phrase in bad_title_phrases:
+            if phrase in title:
+                return True
+    return False
 
-#def title_has_two_tags(title):
-#    title = title.lower()
-#    two_tags_regex = re.compile('.*\[(intentional|unintentional|roleplay|role play|journalism|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|role play|journalism|discussion|question|meta|request)\].*', re.I)
-#    two_tags = (re.search(two_tags_regex, title) is not None) # search the title for two tags; if two are found set true, else set false
+def title_has_two_tags(title):
+    title = title.lower()
+    two_tags_regex = re.compile('.*\[(intentional|unintentional|roleplay|role play|journalism|discussion|question|meta|request)\].*\[(intentional|unintentional|roleplay|role play|journalism|discussion|question|meta|request)\].*', re.I)
+    two_tags = (re.search(two_tags_regex, title) is not None) # search the title for two tags; if two are found set true, else set false
 
-#    if two_tags:
-#        if "[intentional]" in title and ("[roleplay]" in title or "[role play]" in title):
-#            title = title.replace("[intentional]", "").replace("[roleplay]", "").replace("[role play]", "")
+    if two_tags:
+       if "[intentional]" in title and ("[roleplay]" in title or "[role play]" in title):
+            title = title.replace("[intentional]", "").replace("[roleplay]", "").replace("[role play]", "")
             
-#            if any(f in title for f in ["[unintentional]", "[journalism]", "[question]", "[discussion]", "[request]", "[meta]"]): # remove detected tags and check if there are still some left
-#                return True # another tag is found
-#            else: 
-#                return False # those were the only ones
+            if any(f in title for f in ["[unintentional]", "[journalism]", "[question]", "[discussion]", "[request]", "[meta]"]): # remove detected tags and check if there are still some left
+                return True # another tag is found
+            else: 
+                return False # those were the only ones
 
-#            return False # if the two tags are [intentional] and [roleplay] then allow it
-#        return True # two tags in title but not intentional and roleplay
-#    else:
-#        return False
+            return False # if the two tags are [intentional] and [roleplay] then allow it
+       return True # two tags in title but not intentional and roleplay
+    else:
+        return False
 
-#def title_is_caps(title):
-#    title = title.replace("ASMR", "") # Remove the string "ASMR"
-#    title = title.replace("[INTENTIONAL]", "") # Remove the string "INTENTIONAL"
-#    title = title.replace("[Intentional]", "")
-#    title = title.replace("[intentional]", "")
-#    title = title.replace("[UNINTENTIONAL]", "") # Remove the string "UNINTENTIONAL"
-#    title = title.replace("[Unintentional]", "")
-#    title = title.replace("[unintentional]", "")
-#    title = ''.join(char for char in title if char in "etaoinsrhldcufmpgwybvkxjqzABCDEFGHIJKLMNOPQRSTUVWXYZ ")  # Remove anything that isn't alphabetic or a space
+def title_is_caps(title):
+    title = title.replace("ASMR", "") # Remove the string "ASMR"
+    title = title.replace("[INTENTIONAL]", "") # Remove the string "INTENTIONAL"
+    title = title.replace("[Intentional]", "")
+    title = title.replace("[intentional]", "")
+    title = title.replace("[UNINTENTIONAL]", "") # Remove the string "UNINTENTIONAL"
+    title = title.replace("[Unintentional]", "")
+    title = title.replace("[unintentional]", "")
+    title = ''.join(char for char in title if char in "etaoinsrhldcufmpgwybvkxjqzABCDEFGHIJKLMNOPQRSTUVWXYZ ")  # Remove anything that isn't alphabetic or a space
 
-#    words = title.split(" ")
-#    tails = []
+    words = title.split(" ")
+    tails = []
 
-#    for word in words:
-#        tails.append(word[1:]) #Remove first letter of each word
+    for word in words:
+        tails.append(word[1:]) #Remove first letter of each word
 
-#    normalised_title = ""
-#    normalised_title = "".join(word for word in tails) # merge words back together
-#    capitals = "".join(char for char in normalised_title if char.upper() == char) # copy only capitals
+    normalised_title = ""
+    normalised_title = "".join(word for word in tails) # merge words back together
+    capitals = "".join(char for char in normalised_title if char.upper() == char) # copy only capitals
     
-#    if len(capitals) >= 0.2 * len(normalised_title): #if capitals are 20% of remaining title
-#        return True
-#    else:
-#        return False
+    if len(capitals) >= 0.2 * len(normalised_title): #if capitals are 20% of remaining title
+        return True
+    else:
+        return False
 
 
-#def is_banned_link(url):
-#    if (   (    ".youtube." in url 
-#             or "youtu.be"  in url
-#           )
-#        and(    "playlist"  in url
-#             or "list="     in url 
-#             or "/channel/" in url 
-#             or "/user/"    in url
-#           )
-#       ): # sad
-#        return True
-#    else:
-#        return False
+def is_banned_link(url):
+    if (   (    ".youtube." in url 
+             or "youtu.be"  in url
+           )
+        and(    "playlist"  in url
+             or "list="     in url 
+             or "/channel/" in url 
+             or "/user/"    in url
+           )
+       ): # sad
+        return True
+    else:
+        return False
 
-#def is_roleplay(title, vid_id):
-#    try:
-#        title = title.lower()
-#        rp_types = ["role play", "roleplay", "role-play", " rp "]
-#        if "[intentional]" in title: # only care about submissions tagged [intentional]
-#            if any(rp in title for rp in rp_types):
-#                return True
-#            else:
-#                vid_title = get_youtube_video_data("videos", "snippet", "id", vid_id, "title")
-#                if vid_title != -1:
-#                    vid_title = vid_title.lower()
-#                    if "roleplay" in vid_title or "role play" in vid_title:
-#                        return True
-#                    else:
-#                        tags = get_youtube_video_data("videos", "snippet", "id", vid_id, "tags")
-#                        if tags != -1:
-#                            return any(rp in tags for rp in rp_types) # true if roleplay in tags; false otherwise
-#        return False
-#    except:
-#        return False
+def is_roleplay(title, vid_id):
+    try:
+        title = title.lower()
+        rp_types = ["role play", "roleplay", "role-play", " rp "]
+        if "[intentional]" in title: # only care about submissions tagged [intentional]
+            if any(rp in title for rp in rp_types):
+                return True
+            else:
+                vid_title = get_youtube_video_data("videos", "snippet", "id", vid_id, "title")
+                if vid_title != -1:
+                    vid_title = vid_title.lower()
+                    if "roleplay" in vid_title or "role play" in vid_title:
+                        return True
+                    else:
+                        tags = get_youtube_video_data("videos", "snippet", "id", vid_id, "tags")
+                        if tags != -1:
+                            return any(rp in tags for rp in rp_types) # true if roleplay in tags; false otherwise
+        return False
+    except: 
+        #don't want any errors to cause a removal
+        return False
 
-#def purge_thread(comment): 
-#    for c in comment.replies:
-#        purge_thread(c) # recursion is cool
-#    comment.remove(False)
+def purge_thread(comment): #works
+    for reply in comment.replies:
+        purge_thread(reply) # recursion is cool
+    comment.mod.remove(False)
 
 #def remove_tech_tuesday(): # Called from schedule where parameters can't be used
 #    sticky = subreddit.get_sticky()
