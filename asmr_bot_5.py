@@ -630,71 +630,72 @@ def get_parent(comment):
 #    else:
 #        return ""
     
-#def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
-#    toplist = shelve.open("topPosts","c")
-#    submissions = subreddit.get_top_from_all(limit=1000)
-#    added_count = 0
-#    total_count = 0
-#    goal = 700
+def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
+    toplist = shelve.open("topPosts","c")
+    submissions = r.subreddit("asmr").top(limit=1000) #TODO after testing revert this to use subreddit.top
+    added_count = 0
+    total_count = 0
+    goal = 750
 
-#    for submission in submissions:
-#        total_count += 1
-#        print("Got submission " + submission.id + "(" + str(total_count) + ")")
-#        if (".youtube" in submission.url or "youtu.be" in submission.url) and (not "playlist" in submission.url) and (not "attribution_link" in submission.url):
-#            try:
-#                result = vid_id_regex.split(submission.url)
-#                vid_id = result[5]
-#                vid_data = get_youtube_video_data("videos", "snippet", "id", vid_id, "all")
-#                if vid_data != -1:
-#                    channel_name = vid_data["channelTitle"]
-#                    vid_title = vid_data["title"]
-#                    toplist[str(added_count)] = {"URL" : submission.url, "Channel": channel_name, "Title": vid_title, "Reddit Link": submission.permalink}
-#                    added_count += 1
-#                    if added_count > goal:
-#                        break
-#                else:
-#                    print("Youtube Exception. Bad link?")
-#            except Exception as e:
-#                print("Other exception - " + str(e))
-#                # traceback.print_exc()
-#    toplist.sync()
-#    toplist.close()
-#    print("total videos: " + str(added_count))
+    for submission in submissions:
+        total_count += 1
+        print("Got submission " + submission.id + " (" + str(total_count) + ")")
+        if is_youtube_link(submission.url):
+            try:
+                result = vid_id_regex.split(submission.url)
+                vid_id = result[5]
+                vid_data = get_youtube_video_data("videos", "snippet", "id", vid_id, "all")
+                if vid_data != -1:
+                    channel_name = vid_data["channelTitle"]
+                    vid_title = vid_data["title"]
+                    toplist[str(added_count)] = {"URL" : submission.url, "Channel": channel_name, "Title": vid_title, "Reddit Link": submission.permalink}
+                    added_count += 1
+                    if added_count > goal:
+                        break
+                else:
+                    print("Youtube Exception. Bad link?")
+            except Exception as e:
+                print("Other exception - " + str(e))
+                # traceback.print_exc()
+    toplist.sync()
+    toplist.close()
+    print("total videos: " + str(added_count))
 
-#def recommend_top_submission():
-#    toplist = shelve.open("topPosts","c")
+def recommend_top_submission():
+    toplist = shelve.open("topPosts","c")
 
-#    if "1" not in list(toplist): # if the database doesn't exist
-#        toplist.sync()
-#        toplist.close()
-#        update_top_submissions()
-#        toplist = shelve.open("topPosts","c")
+    if "1" not in list(toplist): # if the database doesn't exist
+        toplist.sync()
+        toplist.close()
+        update_top_submissions()
+        toplist = shelve.open("topPosts","c")
 
-#    rand = random.randint(0, len(toplist)-1)
-#    title = ''.join(char for char in toplist[str(rand)]["Title"] if char in string.printable)
+    rand = random.randint(0, len(toplist)-1)
+    title = ''.join(char for char in toplist[str(rand)]["Title"] if char in string.printable)
 
-#    if title == "":
-#        title = "this video"
+    if title == "":
+        title = "this video"
 
-#    rtn = "How about [" + title + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
+    rtn = "How about [" + title + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
     
-#    toplist.sync()
-#    toplist.close()
+    toplist.sync()
+    toplist.close()
 
-#    return rtn
+    return rtn
 
-#def user_is_too_new(user):
-#    if user.created_utc > time.time()-(60*60*24*182): #account is LESS than 6 months (182 days) old
-#        return True
-#    else:
-#        return False # not fully implemented yet TODO
+def user_is_too_new(user): #works in bot_5
+    if user.created_utc > time.time()-(60*60*24*182): #account is LESS than 6 months (182 days) old
+        return True
+    else:
+        return False
 
-#def submission_is_deleted(id):
-#    try:
-#        submission = r.get_submission(submission_id = id)
-#        return (submission.author is None)
-#    except praw.errors.InvalidSubmission:
-#        return True
+def submission_is_deleted(id):
+    """Returns True if a submission has been deleted. Does not work for comments."""
+    try:
+        submission = r.submission(id = id)
+        return (submission.author is None)
+    except prawcore.exceptions.NotFound:
+        return True
 
 def new_warning(post, banning_mod, reason="", spam_warning=False):
     user = post.author.name.lower()
@@ -850,6 +851,18 @@ def is_banned_link(url):
     else:
         return False
 
+def is_youtube_link(url):
+    if ((".youtube." in url or "youtu.be" in url)
+        and not("playlist"  in url
+             or "list="     in url 
+             or "/channel/" in url 
+             or "/user/"    in url
+               )
+       ):
+        return True
+    else:
+        return False
+        
 def is_roleplay(title, vid_id):
     try:
         title = title.lower()
@@ -1014,8 +1027,8 @@ subreddit = r.subreddit("asmrmodtalk")
 
 ###### TEST CODE GOES HERE
 
-#input()
-#exit()
+input()
+exit()
 
 ###### END OF TEST CODE
 
