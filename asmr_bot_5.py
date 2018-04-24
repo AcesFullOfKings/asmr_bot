@@ -370,118 +370,120 @@ def check_submissions():
                 submission.reply(capital_explain).mod.distinguish(sticky=True)
                 r.redditor("theonefoster").message(subject="Upper case title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
                 print("Removed submission " + submission.id + " for having an uppercase title.")
-            #elif ("youtube" in submission.url or "youtu.be" in submission.url):
-            #    try:
-            #        if is_banned_link(submission.url):
-            #            submission.remove(False)
-            #            submission.add_comment(channel_or_playlist_explain).distinguish(sticky=True)
-            #            print("Removed submission " + submission.id + " (link to channel/playlist)")
-            #        else:
-            #            vid_id = get_vid_id(submission.url)
-            #            channel_id = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelId")                  
-            #            removed = False
+            elif ("youtube" in submission.url or "youtu.be" in submission.url):
+                try:
+                    if is_channel_or_playlist_link(submission.url):
+                        submission.mod.remove(False)
+                        submission.reply(channel_or_playlist_explain).distinguish(sticky=True)
+                        print("Removed submission " + submission.id + " (link to channel/playlist)")
+                    else:
+                        vid_id = get_vid_id(submission.url)
+                        channel_id = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelId")                  
+                        removed = False
 
-            #            if channel_id in banned_channels:
-            #                submission.remove(False) # checks for banned youtube channels
-            #                submission.add_comment(banned_channel_explain).distinguish(sticky=True)
-            #                print("Removed submission " + submission.id + " (banned youtube channel)")
-            #                removed = True
-            #            elif video_is_unlisted(vid_id):
-            #                submission.remove(False)
-            #                submission.add_comment(unlisted_explain).distinguish(sticky=True)
-            #                print("Removed submission " + submission.shortlink + " (unlisted video)")
-            #                removed = True
-            #            elif vid_id in recent_video_data["videos"]: # submission is repost
-            #                my_old_post = recent_video_data["videos"][vid_id]
-            #                try:
-            #                    old_post = r.get_info(thing_id="t3_" + my_old_post.sub_ID)
-            #                    if old_post is None or old_post.author is None or old_post.banned_by is not None: # if old post isn't live, i.e. is removed or deleted
-            #                        remove_post = False # allow repost since old one is gone
-            #                    else: 
-            #                        if old_post.permalink == submission.permalink:
-            #                            continue
-            #                        else:
-            #                            remove_post = True # repost will be removed
-            #                except:
-            #                    remove_post = False # assume repost is allowed by default; won't be removed
+                        if channel_id in banned_channels:
+                            submission.mod.remove(False) # checks for banned youtube channels
+                            submission.reply(banned_channel_explain).distinguish(sticky=True)
+                            print("Removed submission " + submission.id + " (banned youtube channel)")
+                            removed = True
+                        elif video_is_unlisted(vid_id):
+                            submission.mod.remove(False)
+                            submission.reply(unlisted_explain).distinguish(sticky=True)
+                            print("Removed submission " + submission.shortlink + " (unlisted video)")
+                            removed = True
+                        elif vid_id in recent_video_data["videos"]: # submission is repost
+                            my_old_post = recent_video_data["videos"][vid_id]
+                            try:
+                                old_post = r.submission(id=my_old_post.sub_ID)
+                                if old_post is None or old_post.author is None or old_post.banned_by is not None: # if old post isn't live, i.e. is removed or deleted
+                                    remove_post = False # allow repost since old one is gone
+                                else: 
+                                    if old_post.permalink == submission.permalink:
+                                        continue
+                                    else:
+                                        remove_post = True # repost will be removed
+                            except (prawcore.exceptions.PrawcoreException, praw.exceptions.PRAWException):
+                                remove_post = False # assume repost is allowed by default; won't be removed
 
-            #                if remove_post: # flag to show if it should be removed
-            #                    submission.remove(False)
-            #                    comment = repost_explain.format(old_link=old_post.permalink)
-            #                    submission.add_comment(comment).distinguish(sticky=True)
-            #                    removed = True
-            #                    print("Removed submission " + submission.id + " (reposted video)")
+                            if remove_post: # flag to show if it should be removed
+                                submission.mod.remove(False)
+                                comment = repost_explain.format(old_link=old_post.permalink)
+                                submission.reply(comment).distinguish(sticky=True)
+                                removed = True
+                                print("Removed submission " + submission.id + " (reposted video)")
 
-            #            if not removed: # successful submission (youtube links only)
-            #                my_sub = my_submission_type()
-            #                my_sub.sub_permalink = submission.permalink
-            #                my_sub.sub_ID = submission.id
-            #                my_sub.channel_ID = channel_id
-            #                my_sub.date_created = submission.created_utc
+                        if not removed: # successful submission (youtube links only)
+                            my_sub = my_submission_type()
+                            my_sub.sub_permalink = submission.permalink
+                            my_sub.sub_ID = submission.id
+                            my_sub.channel_ID = channel_id
+                            my_sub.date_created = submission.created_utc
 
-            #                time.sleep(1)
-            #                submission.refresh() #I wonder if this will solve the "Nonetype has no attribute 'lower()'" issue..
+                            time.sleep(1)
+                            submission.refresh() #I wonder if this will solve the "Nonetype has no attribute 'lower()'" issue..
 
-            #                if submission.link_flair_text.lower() != "roleplay" and "[intentional]" in submission.title.lower() and is_roleplay(submission.title, vid_id):
-            #                    submission.set_flair("ROLEPLAY", "roleplay")
-            #                    print("Reflaired submission " + submission.id + " as roleplay.")
+                            if submission.link_flair_text.lower() != "roleplay" and "[intentional]" in submission.title.lower() and is_roleplay(submission.title, vid_id):
+                                choices = submission.flair.choices() #get flair choices
+                                template_id = next(x for x in choices if x['flair_text'] == "ROLEPLAY")['flair_template_id'] #select flair template for ROLEPLAY flair
+                                submission.flair.select(template_id, "ROLEPLAY") #set slair with text of "ROLEPLAY"
+                                print("Reflaired submission " + submission.id + " as roleplay.")
                                     
-            #                recent_videos_copy = recent_video_data["videos"]
-            #                recent_videos_copy[vid_id] = my_sub # add submission info to temporary dict
-            #                recent_video_data["videos"] = recent_videos_copy # copy new dict to shelve (can't add to shelve dict directly)
+                            recent_videos_copy = recent_video_data["videos"]
+                            recent_videos_copy[vid_id] = my_sub # add submission info to temporary dict
+                            recent_video_data["videos"] = recent_videos_copy # copy new dict to shelve (can't add to shelve dict directly)
 
-            #                # now check if user has submitted three videos of same channel
+                            # now check if user has submitted three videos of same channel
                                 
-            #                if submission.author.name not in user_submission_data["submissions"]:
-            #                    subs = user_submission_data["submissions"]
-            #                    subs[submission.author.name] = [my_sub]
-            #                    user_submission_data["submissions"] = subs
-            #                else:
-            #                    user_submission_list = user_submission_data["submissions"][submission.author.name]
-            #                    count = 1 # there's already one in submission, don't forget to count that!
+                            if submission.author.name not in user_submission_data["submissions"]:
+                                subs = user_submission_data["submissions"]
+                                subs[submission.author.name] = [my_sub]
+                                user_submission_data["submissions"] = subs
+                            else:
+                                user_submission_list = user_submission_data["submissions"][submission.author.name]
+                                count = 1 # there's already one in submission, don't forget to count that!
                                 
-            #                    for _submission in user_submission_list:
-            #                        live_submission = r.get_info(thing_id="t3_" + _submission.sub_ID) # update object (might have been removed etc)
+                                for _submission in user_submission_list:
+                                    live_submission = r.submission(id_submission.sub_ID) # update object (might have been removed etc)
 
-            #                        if (not submission_is_deleted(live_submission.id)) and live_submission.banned_by is None: # if submission isn't deleted or removed
-            #                            if _submission.channel_ID == channel_id:
-            #                                count += 1
+                                    if (not submission_is_deleted(live_submission.id)) and live_submission.banned_by is None: # if submission isn't deleted or removed
+                                        if _submission.channel_ID == channel_id:
+                                            count += 1
 
-            #                    if count >= 3: # 3 or more submissions to same channel in past day
+                                if count >= 3: # 3 or more submissions to same channel in past day
                                         
-            #                        submission_links = submission.permalink + "\n\n" #start the newline-separated list of submission links
+                                    submission_links = submission.permalink + "\n\n" #start the newline-separated list of submission links
                                     
-            #                        for s in user_submission_list:
-            #                            submission_links += s.sub_permalink + "\n\n"
-            #                            sub_to_remove = r.get_info(thing_id="t3_" + s.sub_ID)
-            #                            sub_to_remove.remove(False)
+                                    for s in user_submission_list:
+                                        submission_links += s.sub_permalink + "\n\n"
+                                        sub_to_remove = r.submission(id=s.sub_ID)
+                                        sub_to_remove.mod.remove(False)
 
-            #                        user_submission_data["submissions"][submission.author.name] = [] # clear the list (user is banned anyway)
+                                    user_submission_data["submissions"][submission.author.name] = [] # clear the list (user is banned anyway)
 
-            #                        submission.remove(False)
-            #                        submission.add_comment(spam_explain).distinguish(sticky=True) # doesn't mention ban length
-            #                        duration = new_warning(submission, "asmr_bot", "spam", spam_warning=True)
+                                    submission.mod.remove(False)
+                                    submission.reply(spam_explain).distinguish(sticky=True) # doesn't mention ban length
+                                    duration = new_warning(submission, "asmr_bot", "spam", spam_warning=True)
 
-            #                        if duration == 1:
-            #                            duration = "1 day only"
-            #                        else:
-            #                            duration = str(duration) + " days"
+                                    if duration == 1:
+                                        duration = "1 day only"
+                                    else:
+                                        duration = str(duration) + " days"
 
-            #                        r.send_message("/r/" + subreddit.display_name, "Ban Notification", "I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **" + duration + "**.\n\nLinks to the offending submissions:\n\n" + submission_links + "\n\n/r/asmr/about/banned")
+                                    subreddit.message(subject="Ban Notification", message="I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **" + duration + "**.\n\nLinks to the offending submissions:\n\n" + submission_links + "\n\n/r/asmr/about/banned")
 
-            #                        print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
+                                    print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
                                         
-            #                    else:
-            #                        subs = user_submission_data["submissions"]  # copy dict
-            #                        l = subs[submission.author.name] # get list of user submissions
-            #                        l.append(my_sub) # append submission to list
-            #                        subs[submission.author.name] = l # update dict value
-            #                        user_submission_data["submissions"] = subs # write dict back to shelve 
-            #    except Exception as ex:
-            #        print("exception on processing of submission " + submission.shortlink + " - " + str(ex))
-                    
-            #        if "ran out of input" in str(ex).lower():
-            #            break
+                                else:
+                                    subs = user_submission_data["submissions"]  # copy dict
+                                    l = subs[submission.author.name] # get list of user submissions
+                                    l.append(my_sub) # append submission to list
+                                    subs[submission.author.name] = l # update dict value
+                                    user_submission_data["submissions"] = subs # write dict back to shelve 
+                except Exception as ex:
+                    print("exception on processing of submission " + submission.shortlink + " - " + str(ex))
+                   
+                    if "ran out of input" in str(ex).lower():
+                        break
 
 #def check_messages():
 #    messages = list(r.get_unread()) 
@@ -837,7 +839,7 @@ def title_is_caps(title):
     else:
         return False
 
-def is_banned_link(url):
+def is_channel_or_playlist_link(url):
     if (   (    ".youtube." in url 
              or "youtu.be"  in url
            )
@@ -1027,8 +1029,12 @@ subreddit = r.subreddit("asmrmodtalk")
 
 ###### TEST CODE GOES HERE
 
-#input()
-#exit()
+
+submission = r.submission(id="8ecpv3")
+
+
+input()
+exit()
 
 ###### END OF TEST CODE
 
