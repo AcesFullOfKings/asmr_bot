@@ -238,7 +238,7 @@ def check_comments():
 #                    # so "if reply" will evaluate to False
 #                    if reply:
 #                        print("Replying to tagged channel..")
-#                        comment.reply(reply).distinguish()
+#                        comment.reply(reply).mod.distinguish()
 #                        continue # don't carry out further checks
                     
                 # moderator commands
@@ -286,7 +286,6 @@ def check_comments():
                         try:
                             parent = get_parent(comment)
                             if parent.fullname[:2] == "t1":# comment
-                                parent.refresh()
                                 purge_thread(parent)
                             else:
                                 r.redditor(comment_author).message(subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") # todo: wat
@@ -349,142 +348,147 @@ def check_submissions():
     submissions = list(subreddit.new(limit=limit))
 
     for submission in submissions:
-        if submission.id not in seen_objects["submissions"]: 
-            seen_submissions = seen_objects["submissions"]
-            seen_submissions.append(submission.id)
-            seen_objects["submissions"] = seen_submissions
-            seen_objects.sync()
+        try:
+            if submission.id not in seen_objects["submissions"]: 
+                seen_submissions = seen_objects["submissions"]
+                seen_submissions.append(submission.id)
+                seen_objects["submissions"] = seen_submissions
+                seen_objects.sync()
             
-            # for each new submission..
-            if(title_has_two_tags(submission.title)):
-                submission.mod.remove(False)
-                submission.reply(two_tags_explain).mod.distinguish(sticky=True)
-                print("Removed submission " + submission.id + " for having two flair tags.")
-            elif is_bad_title(submission.title):
-                submission.mod.remove(False)
-                submission.reply(auto_title_explain).mod.distinguish(sticky=True)
-                r.redditor("theonefoster").message(subject="Bad title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
-                print("Removed submission " + submission.id + " for having a bad title.")
-            elif title_is_caps(submission.title):
-                submission.mod.remove(False)
-                submission.reply(capital_explain).mod.distinguish(sticky=True)
-                r.redditor("theonefoster").message(subject="Upper case title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
-                print("Removed submission " + submission.id + " for having an uppercase title.")
-            elif ("youtube" in submission.url or "youtu.be" in submission.url):
-                try:
-                    if is_channel_or_playlist_link(submission.url):
-                        submission.mod.remove(False)
-                        submission.reply(channel_or_playlist_explain).distinguish(sticky=True)
-                        print("Removed submission " + submission.id + " (link to channel/playlist)")
-                    else:
-                        vid_id = get_vid_id(submission.url)
-                        channel_id = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelId")                  
-                        removed = False
-
-                        if channel_id in banned_channels:
-                            submission.mod.remove(False) # checks for banned youtube channels
-                            submission.reply(banned_channel_explain).distinguish(sticky=True)
-                            print("Removed submission " + submission.id + " (banned youtube channel)")
-                            removed = True
-                        elif video_is_unlisted(vid_id):
+                # for each new submission..
+                if(title_has_two_tags(submission.title)):
+                    submission.mod.remove(False)
+                    submission.reply(two_tags_explain).mod.distinguish(sticky=True)
+                    print("Removed submission " + submission.id + " for having two flair tags.")
+                elif is_bad_title(submission.title):
+                    submission.mod.remove(False)
+                    submission.reply(auto_title_explain).mod.distinguish(sticky=True)
+                    r.redditor("theonefoster").message(subject="Bad title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
+                    print("Removed submission " + submission.id + " for having a bad title.")
+                elif title_is_caps(submission.title):
+                    submission.mod.remove(False)
+                    submission.reply(capital_explain).mod.distinguish(sticky=True)
+                    r.redditor("theonefoster").message(subject="Upper case title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
+                    print("Removed submission " + submission.id + " for having an uppercase title.")
+                elif ("youtube" in submission.url or "youtu.be" in submission.url):
+                    try:
+                        if is_channel_or_playlist_link(submission.url):
                             submission.mod.remove(False)
-                            submission.reply(unlisted_explain).distinguish(sticky=True)
-                            print("Removed submission " + submission.shortlink + " (unlisted video)")
-                            removed = True
-                        elif vid_id in recent_video_data["videos"]: # submission is repost
-                            my_old_post = recent_video_data["videos"][vid_id]
-                            try:
-                                old_post = r.submission(id=my_old_post.sub_ID)
-                                if old_post is None or old_post.author is None or old_post.banned_by is not None: # if old post isn't live, i.e. is removed or deleted
-                                    remove_post = False # allow repost since old one is gone
-                                else: 
-                                    if old_post.permalink == submission.permalink:
-                                        continue
-                                    else:
-                                        remove_post = True # repost will be removed
-                            except (prawcore.exceptions.PrawcoreException, praw.exceptions.PRAWException):
-                                remove_post = False # assume repost is allowed by default; won't be removed
+                            submission.reply(channel_or_playlist_explain).mod.distinguish(sticky=True)
+                            print("Removed submission " + submission.id + " (link to channel/playlist)")
+                        else:
+                            vid_id = get_vid_id(submission.url)
+                            channel_id = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelId")                  
+                            removed = False
 
-                            if remove_post: # flag to show if it should be removed
-                                submission.mod.remove(False)
-                                comment = repost_explain.format(old_link=old_post.permalink)
-                                submission.reply(comment).distinguish(sticky=True)
+                            if channel_id in banned_channels:
+                                submission.mod.remove(False) # checks for banned youtube channels
+                                submission.reply(banned_channel_explain).mod.distinguish(sticky=True)
+                                print("Removed submission " + submission.id + " (banned youtube channel)")
                                 removed = True
-                                print("Removed submission " + submission.id + " (reposted video)")
+                            elif video_is_unlisted(vid_id):
+                                submission.mod.remove(False)
+                                submission.reply(unlisted_explain).mod.distinguish(sticky=True)
+                                print("Removed submission " + submission.shortlink + " (unlisted video)")
+                                removed = True
+                            elif vid_id in recent_video_data["videos"]: # submission is repost
+                                my_old_post = recent_video_data["videos"][vid_id]
+                                try:
+                                    old_post = r.submission(id=my_old_post.sub_ID)
+                                    if old_post is None or old_post.author is None or old_post.banned_by is not None: # if old post isn't live, i.e. is removed or deleted
+                                        remove_post = False # allow repost since old one is gone
+                                    else: 
+                                        if old_post.permalink != submission.permalink:
+                                            remove_post = True # repost will be removed
+                                        else:
+                                            continue # already processed this post, so don't process it again
+                                except (prawcore.exceptions.PrawcoreException, praw.exceptions.PRAWException):
+                                    remove_post = False # assume repost is allowed by default; won't be removed
 
-                        if not removed: # successful submission (youtube links only)
-                            my_sub = my_submission_type()
-                            my_sub.sub_permalink = submission.permalink
-                            my_sub.sub_ID = submission.id
-                            my_sub.channel_ID = channel_id
-                            my_sub.date_created = submission.created_utc
-
-                            time.sleep(1)
-                            submission.refresh() #I wonder if this will solve the "Nonetype has no attribute 'lower()'" issue..
-
-                            if submission.link_flair_text.lower() != "roleplay" and "[intentional]" in submission.title.lower() and is_roleplay(submission.title, vid_id):
-                                choices = submission.flair.choices() #get flair choices
-                                template_id = next(x for x in choices if x['flair_text'] == "ROLEPLAY")['flair_template_id'] #select flair template for ROLEPLAY flair
-                                submission.flair.select(template_id, "ROLEPLAY") #set slair with text of "ROLEPLAY"
-                                print("Reflaired submission " + submission.id + " as roleplay.")
-                                    
-                            recent_videos_copy = recent_video_data["videos"]
-                            recent_videos_copy[vid_id] = my_sub # add submission info to temporary dict
-                            recent_video_data["videos"] = recent_videos_copy # copy new dict to shelve (can't add to shelve dict directly)
-
-                            # now check if user has submitted three videos of same channel
-                                
-                            if submission.author.name not in user_submission_data["submissions"]:
-                                subs = user_submission_data["submissions"]
-                                subs[submission.author.name] = [my_sub]
-                                user_submission_data["submissions"] = subs
-                            else:
-                                user_submission_list = user_submission_data["submissions"][submission.author.name]
-                                count = 1 # there's already one in submission, don't forget to count that!
-                                
-                                for _submission in user_submission_list:
-                                    live_submission = r.submission(id_submission.sub_ID) # update object (might have been removed etc)
-
-                                    if (not submission_is_deleted(live_submission.id)) and live_submission.banned_by is None: # if submission isn't deleted or removed
-                                        if _submission.channel_ID == channel_id:
-                                            count += 1
-
-                                if count >= 3: # 3 or more submissions to same channel in past day
-                                        
-                                    submission_links = submission.permalink + "\n\n" #start the newline-separated list of submission links
-                                    
-                                    for s in user_submission_list:
-                                        submission_links += s.sub_permalink + "\n\n"
-                                        sub_to_remove = r.submission(id=s.sub_ID)
-                                        sub_to_remove.mod.remove(False)
-
-                                    user_submission_data["submissions"][submission.author.name] = [] # clear the list (user is banned anyway)
-
+                                if remove_post: # flag to show if it should be removed
                                     submission.mod.remove(False)
-                                    submission.reply(spam_explain).distinguish(sticky=True) # doesn't mention ban length
-                                    duration = new_warning(submission, "asmr_bot", "spam", spam_warning=True)
+                                    comment = repost_explain.format(old_link=old_post.permalink)
+                                    submission.reply(comment).mod.distinguish(sticky=True)
+                                    removed = True
+                                    print("Removed submission " + submission.id + " (reposted video)")
 
-                                    if duration == 1:
-                                        duration = "1 day only"
-                                    else:
-                                        duration = str(duration) + " days"
+                            if not removed: # successful submission (youtube links only)
+                                my_sub = my_submission_type()
+                                my_sub.sub_permalink = submission.permalink
+                                my_sub.sub_ID = submission.id
+                                my_sub.channel_ID = channel_id
+                                my_sub.date_created = submission.created_utc
 
-                                    subreddit.message(subject="Ban Notification", message="I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **" + duration + "**.\n\nLinks to the offending submissions:\n\n" + submission_links + "\n\n/r/asmr/about/banned")
+                                time.sleep(1)
+                                submission = r.submission(id=submission.id) # Refreshes submission; solves the "Nonetype has no attribute 'lower()'" issue..
 
-                                    print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
-                                        
+                                if submission.link_flair_text is not None and submission.link_flair_text.lower() != "roleplay" and "[intentional]" in submission.title.lower() and is_roleplay(submission.title, vid_id):
+                                    choices = submission.flair.choices() #get flair choices
+                                    template_id = next(x for x in choices if x['flair_text'] == "ROLEPLAY")['flair_template_id'] #select flair template for ROLEPLAY flair
+                                    submission.flair.select(template_id, "ROLEPLAY") #set slair with text of "ROLEPLAY"
+                                    print("Reflaired submission " + submission.id + " as roleplay.")
+                                    
+                                recent_videos_copy = recent_video_data["videos"]
+                                recent_videos_copy[vid_id] = my_sub # add submission info to temporary dict
+                                recent_video_data["videos"] = recent_videos_copy # copy new dict to shelve (can't add to shelve dict directly)
+
+                                # now check if user has submitted three videos of same channel
+                                
+                                if submission.author.name not in user_submission_data["submissions"]:
+                                    subs = user_submission_data["submissions"]
+                                    subs[submission.author.name] = [my_sub]
+                                    user_submission_data["submissions"] = subs
                                 else:
-                                    subs = user_submission_data["submissions"]  # copy dict
-                                    l = subs[submission.author.name] # get list of user submissions
-                                    l.append(my_sub) # append submission to list
-                                    subs[submission.author.name] = l # update dict value
-                                    user_submission_data["submissions"] = subs # write dict back to shelve 
-                except Exception as ex:
-                    print("exception on processing of submission " + submission.shortlink + " - " + str(ex))
-                   
-                    if "ran out of input" in str(ex).lower():
-                        break
+                                    user_submission_list = user_submission_data["submissions"][submission.author.name]
+                                    count = 1 # there's already one in submission, don't forget to count that!
+                                
+                                    for _submission in user_submission_list:
+                                        live_submission = r.submission(id = _submission.sub_ID) # update object (might have been removed etc)
 
+                                        if (not submission_is_deleted(live_submission.id)) and live_submission.banned_by is None: # if submission isn't deleted or removed
+                                            if _submission.channel_ID == channel_id:
+                                                count += 1
+
+                                    if count >= 3: # 3 or more submissions to same channel in past day
+                                        
+                                        submission_links = submission.permalink + "\n\n" #start the newline-separated list of submission links
+                                    
+                                        for s in user_submission_list:
+                                            submission_links += s.sub_permalink + "\n\n"
+                                            sub_to_remove = r.submission(id=s.sub_ID)
+                                            sub_to_remove.mod.remove(False)
+
+                                        user_submission_data["submissions"][submission.author.name] = [] # clear the list (user is banned anyway)
+
+                                        submission.mod.remove(False)
+                                        submission.reply(spam_explain).mod.distinguish(sticky=True) # doesn't mention ban length
+                                        duration = new_warning(submission, "asmr_bot", "spam", spam_warning=True)
+
+                                        if duration == 1:
+                                            duration = "1 day only"
+                                        else:
+                                            duration = str(duration) + " days"
+
+                                        subreddit.message(subject="Ban Notification", message="I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **" + duration + "**.\n\nLinks to the offending submissions:\n\n" + submission_links + "\n\n/r/asmr/about/banned")
+
+                                        print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
+                                        
+                                    else:
+                                        subs = user_submission_data["submissions"]  # copy dict
+                                        l = subs[submission.author.name] # get list of user submissions
+                                        l.append(my_sub) # append submission to list
+                                        subs[submission.author.name] = l # update dict value
+                                        user_submission_data["submissions"] = subs # write dict back to shelve 
+                    except Exception as ex:
+                        print("exception on processing of submission " + submission.shortlink + " - " + str(ex))
+                   
+                        if "ran out of input" in str(ex).lower():
+                            break
+        except praw.exceptions.APIException as ex:
+            if ex.error_type == 'TOO_OLD': #post is archived so can't be commented on
+                continue
+            else:
+                raise
 #def check_messages():
 #    messages = list(r.get_unread()) 
 
@@ -574,7 +578,7 @@ def check_submissions():
 #                    message.reply(replies.command_not_recognised)
 #            else:
 #                print("Replying to comment in messages..")
-#                message.reply(comment_reply).distinguish()
+#                message.reply(comment_reply).mod.distinguish()
 #        except:
 #            pass
 #        finally:
@@ -708,8 +712,8 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
     if user in mod_list:
         raise PermissionError("Error on ban attempt - cannot ban moderator " + user)
 
-    if reason == "spam" and banning_mod != "asmr_bot": #only asmr_bot can give spam warnings, which are identified by the reason of "spam"
-        reason = "spamming"
+    if reason == "spam" and banning_mod != "asmr_bot": # only asmr_bot can give spam warnings, which are identified by the reason of "spam"
+        reason = "user was spamming"
 
     if spam_warning:
         msg_intro = "You have received an automatic warning ban for spamming links to a youtube channel after your post [here]({link}).\n\n"
@@ -725,67 +729,56 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
         else:
             reason = "<No reason provided>"
 
-    link = ""
-    note = "{mod} - {reason} - {link}"
-
-    if "t3" == post.fullname[:2]: # submission
+    if post.fullname[:2] == "t3": # submission
         link = post.shortlink
     else: # comment
         link = post.permalink
 
-    note = note.format(mod=banning_mod, reason=reason, link=link)
+    note = "{mod} - {reason} - {link}".format(mod=banning_mod, reason=reason, link=link)
     msg_intro = msg_intro.format(link=link)
     reason_text = reason_text.format(mod=banning_mod)
 
-    #at this point, got user, note, link, msg_intro, reason_text. Need number of previous bans, so..
+    # at this point, got user, note, link, msg_intro, reason_text. 
 
     warnings_cursor.execute("SELECT * FROM warnings WHERE name=?", [user])
     db_result = warnings_cursor.fetchall()
 
-    has_spam_warning = False
-    previous_bans = 0
+    previous_bans = len(db_result) # count number of previous bans
+    user_has_previous_spam_warning = ("asmr_bot", "spam") in [(warning[2], warning[3]) for warning in db_result]
 
-    for ban in db_result: #count number of previous bans (excluding one spam ban)
-        if ban[3] == "spam":
-            if not has_spam_warning:
-                has_spam_warning = True
-            else:
-                previous_bans += 1
-        else:
-            previous_bans += 1
+    if user_has_previous_spam_warning:
+        previous_bans -= 1
+        spam_warning = False
 
-    spam_warning_added = False
-    ban_number = None
-    if spam_warning:
-        if previous_bans == 0 and has_spam_warning == False:
-            #add zeroeth warning
-            reason_text = ""
-            description = "This warning is to give you an opportunity to read the subreddit and site-wide rules on self-promotion and spam.\n\nThis is your soft warning, which is accompanied by a 1-day subreddit ban. Please take 2 minutes to read our subreddit rules before participating in the community again.".format(link=link)
-            duration = 1
-            spam_warning_added = True
-        else:
-            spam_warning_added = False
-
-    if not spam_warning_added: #could still be a spam warning if they've had a warning in the past
-        if previous_bans == 0:
-            description = "This is your first official warning, which is accompanied by a 7-day subreddit ban. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again."
-            if not spam_warning:
-                description = description + " If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early."
-            duration = 7
-        elif previous_bans == 1:
-            description = "**This is your final warning**, which is accompanied by a 30-day subreddit ban; if you receive another warning, you will be permanently banned. Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again."
-            duration = 30
-        elif previous_bans >= 2:
-            description = "This is your third warning, meaning you are now permanently banned."
-            duration = None
+    if spam_warning and previous_bans == 0: #add zeroeth (spam) warning
+        reason_text = ""
+        duration = 1
+        description = ("This warning is to give you an opportunity to read the subreddit and site-wide rules on self-promotion and spam."+
+                       "\n\nThis is your soft warning, which is accompanied by a 1-day subreddit ban. " + 
+                       "Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again.") 
+    elif previous_bans == 0: # or user has a single past spam warning 
+        duration = 7
+        description = ("This is your first official warning, which is accompanied by a 7-day subreddit ban. " +
+                        "Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again. " +
+                        "If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early.")
+    elif previous_bans == 1:
+        duration = 30
+        description = ("**This is your final warning**, which is accompanied by a 30-day subreddit ban; " +
+                        "if you receive another warning, you will be permanently banned. " +
+                        "Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again.")
+    elif previous_bans >= 2: #should never be >2 though unless they get a third warning and are then manually unbanned.. then get another warning
+        description = "This is your third warning, meaning you are now permanently banned."
+        duration = None
         
     ban_date = datetime.date.today()
     msg = msg_intro + reason_text + description
     print("Adding ban for user " + user + ". (reason: " + reason + ")")
     subreddit.banned.add(post.author, duration=duration, note=note, ban_message=msg)
+
     warnings_cursor.execute("INSERT INTO warnings VALUES(?,?,?,?,?)",  [user, link, banning_mod, reason, ban_date])
     warnings_db.commit()
     update_warnings_wiki()
+
     return duration
 
 def is_bad_title(title):
@@ -1030,11 +1023,8 @@ subreddit = r.subreddit("asmrmodtalk")
 ###### TEST CODE GOES HERE
 
 
-submission = r.submission(id="8ecpv3")
-
-
-input()
-exit()
+#input()
+#exit()
 
 ###### END OF TEST CODE
 
@@ -1046,7 +1036,7 @@ if __name__ == "__main__":
     get_banned_channels()
 
     schedule.every().thursday.at("23:50").do(remove_ffaf)
-#    schedule.every(14).days.at("03:00").do(update_top_submissions) # once per fortnight ish
+    schedule.every(14).days.at("03:00").do(update_top_submissions) # once per fortnight ish
     schedule.every().hour.do(clear_user_submissions)
     schedule.every().day.do(update_seen_objects)
     schedule.every().day.at("02:00").do(clear_video_submissions) # once per day
@@ -1059,13 +1049,13 @@ if __name__ == "__main__":
 
     print("Setup complete. Starting bot duties.")
 
-    exponential_dropoff = 10
+    exponential_dropoff = 5
 
     while True:
         try:
             asmr_bot()
             exponential_dropoff = 5
-            time.sleep(5)
+            time.sleep(1)
         except prawcore.exceptions.ServerError as e:
             try:
                 print("Server Exception: " + str(e))
