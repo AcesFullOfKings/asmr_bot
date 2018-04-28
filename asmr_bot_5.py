@@ -744,13 +744,12 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
     db_result = warnings_cursor.fetchall()
 
     previous_bans = len(db_result) # count number of previous bans
-    user_has_previous_spam_warning = ("asmr_bot", "spam") in [(warning[2], warning[3]) for warning in db_result]
+    user_has_previous_warning = previous_bans > 0
 
-    if user_has_previous_spam_warning:
-        previous_bans -= 1
-        spam_warning = False
+    if user_has_previous_warning:
+        spam_warning = False #can't give a spam warning if it's not the first warning
 
-    if spam_warning and previous_bans == 0: #add zeroeth (spam) warning
+    if spam_warning: #add zeroeth (spam) warning
         reason_text = ""
         duration = 1
         description = ("This warning is to give you an opportunity to read the subreddit and site-wide rules on self-promotion and spam."+
@@ -963,14 +962,20 @@ def update_warnings_wiki():
     for war in db_result:
         username, link, mod, reason, date = war
         if username not in warned_users:
-            if reason == "spam":
+            if reason == "spam" and mod == "asmr_bot":
                 warned_users[username] = [(link, mod, reason, str(date), 0)]
             else:
                 warned_users[username] = [(link, mod, reason, str(date), 1)]
         else:
-            bans = warned_users[username]
+            bans = warned_users[username] # must be of length >= 1
+            
+            ban_numbers = [ban[4] for ban in bans] # must be of length >= 1
 
-            ban_number = len(bans) + 1
+            if 0 in ban_numbers: # user has a zeroth (spam) warning
+                ban_number = len(bans)
+            else: # user does not have zeroth (spam) warning
+                ban_number = len(bans) + 1
+
             bans.append((link, mod, reason, date, ban_number))
             warned_users[username] = bans
 
@@ -1022,6 +1027,7 @@ subreddit = r.subreddit("asmrmodtalk")
 
 ###### TEST CODE GOES HERE
 
+update_warnings_wiki()
 
 #input()
 #exit()
