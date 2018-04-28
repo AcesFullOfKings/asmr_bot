@@ -489,100 +489,102 @@ def check_submissions():
                 continue
             else:
                 raise
-#def check_messages():
-#    messages = list(r.get_unread()) 
+def check_messages():
+    messages = list(r.inbox.unread())
+    print([message.body + "\n\n" for message in messages])
 
-#    for message in messages:
-#        try:
-#            if not message.was_comment:
-#                user = message.author.name
-#                print("Message dectected from " + user)
+    for message in messages:
+        try:
+            if not message.was_comment:
+                user = message.author.name
+                print("Message dectected from " + user)
 
-#                if ("!recommend" in message.body.lower() or "!recommend" in message.subject.lower()): # recommendation
-#                    print("Recommending popular video to " + message.author.name)
-#                    message_to_send = recommend_top_submission()
-#                    message.reply(message_to_send)
-#                elif(message.subject == "flair request" or message.subject == "re: flair request"): # set flair
+                if ("!recommend" in message.body.lower() or "!recommend" in message.subject.lower()): # recommendation
+                    print("Recommending popular video to " + message.author.name)
+                    message_to_send = recommend_top_submission()
+                    message.reply(message_to_send)
+                elif("flair request" in message.subject): # set flair
                 
-#                    global replies
+                    global replies
 
-#                    using_id = False
-#                    channel_name = message.body.replace(" ", "").replace(".", "")
-#                    description = get_youtube_video_data("channels", "snippet", "forUsername", channel_name, "description")
+                    using_id = False
+                    channel_name = message.body.replace(" ", "").replace(".", "")
+                    description = get_youtube_video_data("channels", "snippet", "forUsername", channel_name, "description")
                 
-#                    if description == -1:
-#                        description = get_youtube_video_data("channels", "snippet", "id", message.body, "description")
-#                        channel_name = get_youtube_video_data("channels", "snippet", "id", message.body, "title")
-#                        using_id = True
+                    if description == -1:
+                        description = get_youtube_video_data("channels", "snippet", "id", message.body, "description")
+                        channel_name = get_youtube_video_data("channels", "snippet", "id", message.body, "title")
+                        using_id = True
 
-#                    if description != -1:
-#                        if using_id:
-#                            subs = int(get_youtube_video_data("channels", "statistics", "id", message.body, "subscriberCount"))
-#                        else:
-#                            subs = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "subscriberCount"))
+                    if description != -1:
+                        if using_id:
+                            subs = int(get_youtube_video_data("channels", "statistics", "id", message.body, "subscriberCount"))
+                        else:
+                            subs = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "subscriberCount"))
 
-#                        if subs >= 1000:
-#                            if using_id:
-#                                age = days_since_youtube_channel_creation(id=message.body)
-#                            else:
-#                                age = days_since_youtube_channel_creation(name=channel_name)
+                        if subs >= 1000:
+                            if using_id:
+                                age = days_since_youtube_channel_creation(id=message.body)
+                            else:
+                                age = days_since_youtube_channel_creation(name=channel_name)
 
-#                            if age > 182:
+                            if age > 182:
+                                if using_id:
+                                    video_count = int(get_youtube_video_data("channels", "statistics", "id", message.body, "videoCount"))
+                                else:
+                                    video_count = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "videoCount"))
 
-#                                if using_id:
-#                                    video_count = int(get_youtube_video_data("channels", "statistics", "id", message.body, "videoCount"))
-#                                else:
-#                                    video_count = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "videoCount"))
+                                if video_count >= 15:
+                                    if not user_is_too_new(message.author):
+                                        if "hey /r/asmr mods!" in description.lower():
+                                            try:
+                                                global subreddit
+                                                subreddit.flair.set(redditor=user, text=channel_name, css_class="purpleflair")
+                                                subreddit.contributor.add(user)
+                                                message.reply("Verification has been successful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the verification message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
 
-#                                if video_count >= 15:
-#                                    if not user_is_too_new(message.author):
-#                                        if "hey /r/asmr mods!" in description.lower():
-#                                            try:
-#                                                global subreddit
-#                                                subreddit.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
-#                                                subreddit.add_contributor(user)
-#                                                message.reply("Verification has been successful! Your flair should be applied within a few minutes, but it can sometimes take up to an hour depending on how slow reddit is being today. Please remember to remove the verification message from your channel description as soon as possible, otherwise somebody could steal your flair. Enjoy!")
-
-#                                                global lounge
-#                                                lounge.add_contributor(user)
-#                                                lounge.set_flair(item=user, flair_text=channel_name, flair_css_class="purpleflair")
-#                                                print("Verified and set flair for " + user)
-#                                            except:
-#                                                message.reply(replies.unknown_error)
-#                                                r.send_message(recipient="theonefoster", subject="Failed flair assignment", message="/u/" + user + " passed flair eligibility but flair assignment failed. Please ensure their flair is set correctly on /r/asmr and /r/asmrCreatorLounge, and that they are an approved submitter on both subreddits. \n\nChannel was: " + channel_name)
-#                                        else:
-#                                            message.reply(replies.no_verification)
-#                                            print("flair verification for " + channel_name + " failed - no verification message.")
-#                                    else:
-#                                        message.reply(replies.inactive)
-#                                        print("flair verification for " + channel_name + " failed - account is too new.")
-#                                else:
-#                                    message.reply(replies.not_enough_videos.format(vid_count = str(video_count)))
-#                                    print("flair verification for " + channel_name + " failed - not enough published videos.")
-#                            else:
-#                                message.reply(replies.underage)
-#                                print("flair verification for " + channel_name + " failed - channel too new.")
-#                        else:
-#                            message.reply(replies.not_enough_subs.format(current_subs=str(subs)))
-#                            print("flair verification for " + channel_name + " failed - not enough subs.")
-#                    else:
-#                        message.reply(replies.channel_not_found)
-#                        print("flair verification failed - channel not found. Message was: " + message.body)
-#                elif(message.subject == "delete flair"): # delete flair
-#                    if message.body == "delete flair":
-#                        r.delete_flair(subreddit="asmr", user=user)
-#                        message.reply(replies.flair_deleted)
-#                        print("Flair deleted for " + user)
-#                elif("post reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
-#                    print("Command not recognised. Message was " + message.body)
-#                    message.reply(replies.command_not_recognised)
-#            else:
-#                print("Replying to comment in messages..")
-#                message.reply(comment_reply).mod.distinguish()
-#        except:
-#            pass
-#        finally:
-#            message.mark_as_read()
+                                                global lounge
+                                                lounge.contributor.add(user)
+                                                lounge.flair.set(redditor=user, text=channel_name, css_class="purpleflair")
+                                                print("Verified and set flair for " + user)
+                                            except Exception as ex:
+                                                message.reply(replies.unknown_error)
+                                                r.redditor("theonefoster").message(subject="Failed flair assignment", message="/u/" + user + " passed flair eligibility but flair assignment failed. Please ensure their flair is set correctly on /r/asmr and /r/asmrCreatorLounge, and that they are an approved submitter on both subreddits. \n\nChannel was: " + channel_name + "\n\n Exception was: " + ex.message)
+                                        else:
+                                            message.reply(replies.no_verification)
+                                            print("flair verification for " + channel_name + " failed - no verification message.")
+                                    else:
+                                        message.reply(replies.inactive)
+                                        print("flair verification for " + channel_name + " failed - account is too new.")
+                                else:
+                                    message.reply(replies.not_enough_videos.format(vid_count = str(video_count)))
+                                    print("flair verification for " + channel_name + " failed - not enough published videos.")
+                            else:
+                                message.reply(replies.underage)
+                                print("flair verification for " + channel_name + " failed - channel too new.")
+                        else:
+                            message.reply(replies.not_enough_subs.format(current_subs=str(subs)))
+                            print("flair verification for " + channel_name + " failed - not enough subs.")
+                    else:
+                        message.reply(replies.channel_not_found)
+                        print("flair verification failed - channel not found. Message was: " + message.body)
+                elif(message.subject == "delete flair"): # delete flair
+                    if message.body == "delete flair":
+                        subreddit.flair.delete(user)
+                        message.reply(replies.flair_deleted)
+                        print("Flair deleted for " + user)
+                elif("post reply" not in message.subject) and ("username mention" not in message.subject) and ("you've been banned from" not in message.subject):
+                    print("Command not recognised. Message was " + message.body)
+                    message.reply(replies.command_not_recognised)
+            else:
+                print("Replying to comment in messages..")
+                message.reply(comment_reply).mod.distinguish()
+        except prawcore.exceptions.Forbidden as ex: # probably tried to distinguish comment in other subreddit
+            pass
+        except Exception as ex:
+            print("Exception in check_messages(): " + ex.message + " - message was: " + message.body)
+        finally:
+            message.mark_read()
 
 def remove_mod_comment(comment):
     """If comment was made by me, I have the authentication to delete it, which is preferred. 
@@ -1009,17 +1011,18 @@ def user_is_subreddit_banned(username): #tested, works
     return username.lower() in names
 
 def asmr_bot():
-    schedule.run_pending()
-    check_submissions()
-    check_comments()
-#    check_messages()
-    check_mod_queue()
+    #schedule.run_pending()
+    #check_submissions()
+    #check_comments()
+    #check_messages()
+    #check_mod_queue()
+    pass
 
 ## ----------------------------
 ## END OF FUNCTIONS
 ## ----------------------------
 
-r = praw.Reddit("asmr_bot")
+r = praw.Reddit("theonefoster")
 print("Logged in as ", end="")
 print(r.user.me())
 subreddit = r.subreddit("asmrmodtalk")
@@ -1027,7 +1030,7 @@ subreddit = r.subreddit("asmrmodtalk")
 
 ###### TEST CODE GOES HERE
 
-update_warnings_wiki()
+check_messages()
 
 #input()
 #exit()
