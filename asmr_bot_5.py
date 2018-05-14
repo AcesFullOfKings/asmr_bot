@@ -17,12 +17,6 @@ import schedule
 
 import asmr_bot_data as d # d for data
 
-class my_submission_type():
-    sub_permalink = ""
-    sub_ID = ""
-    channel_ID = ""
-    date_created = ""
-
 # PRAW details, other imported data
 bad_title_phrases = d.bad_title_phrases
 banned_channels = d.BANNED_CHANNELS
@@ -60,39 +54,34 @@ del(d)
 
 vid_id_regex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
 attribution_regex = re.compile("\/attribution_link\?.*v%3D([^%&]*)(%26|&|$)")
+channel_name_regex = re.compile("\[\[(.*?)\]\]")
 
 # open shelves
 toplist = shelve.open("topPosts","c")
-user_submission_data = shelve.open("user_submission_data", "c") # all submissions from past day by author
-recent_video_data = shelve.open("recent_video_data", "c") # videos submitted over past 3 months
-seen_objects = shelve.open("seen_objects", "c") # to track which objects have been seen.
-
-if "videos" not in recent_video_data: # initialise dict
-    fake = my_submission_type()
-    fake.date_created = time.time()
-    recent_video_data["videos"] = {"id": fake} # empty dict can cause problems. enter test data and remove later.
-
-if "submissions" not in user_submission_data: # initialise dict
-    fake = my_submission_type()
-    fake.date_created = time.time()
-    user_submission_data["submissions"] = {"un": [fake]} # empty dict can cause problems. enter test data and remove later.
-
-if "submissions" not in seen_objects:
-    seen_objects["submissions"] = []
-
-if "comments" not in seen_objects:
-    seen_objects["comments"] = []
-
-user_submission_data.sync()
-recent_video_data.sync()
 
 # Open sql databases
 print("Opening databases..")
 
-warnings_db = sqlite3.connect('warnings.db', detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) # for warnings database (bad if corrupted so not using shelve as it's lost data in the past)
+warnings_db = sqlite3.connect('warnings.db', detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) # for warnings database
 warnings_cursor = warnings_db.cursor()
-warnings_cursor.execute("CREATE TABLE IF NOT EXISTS warnings(NAME TEXT, LINK TEXT, BANNING_MOD TEXT, REASON TEXT, DATE DATE)")
+warnings_cursor.execute("CREATE TABLE IF NOT EXISTS warnings(NAME TEXT, LINK TEXT, BANNING_MOD TEXT, REASON TEXT, BAN_DATE INT, BAN_NUM INT)")
 warnings_db.commit()
+
+user_submissions_db = sqlite3.connect("user_submissions.db")
+user_submissions_cur = user_submissions_db.cursor()
+user_submissions_cur.execute("CREATE TABLE IF NOT EXISTS user_submissions(USERNAME TEXT, SUBMISSION_ID TEXT, SUBMISSION_DATE INT, SUBMISSION_PERMALINK TEXT, CHANNEL_ID TEXT)")
+user_submissions_db.commit()
+
+recent_videos_db = sqlite3.connect("recent_videos.db")
+recent_videos_cur = recent_videos_db.cursor()
+recent_videos_cur.execute("CREATE TABLE IF NOT EXISTS recent_videos(ID TEXT, SUBMISSION_DATE INT, REDDIT_ID TEXT)")
+recent_videos_db.commit()
+
+with open("seen_comments.txt", "a+") as f:
+   pass #guarantee that the file exists. Use a with() block to access info.
+
+with open("seen_submissions.txt", "a+") as f:
+   pass
 
 # ----------------------
 # BEGIN FUNCTIONS
@@ -170,18 +159,16 @@ def check_mod_queue(): #tested - works
             viewed_mod_queue.add(item.fullname)
 
             #for 4 hours in future:
-            hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour + 4)%24)
-            min = str(time.struct_time(time.strptime(time.ctime())).tm_min)
+            #hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour + 4)%24)
+            #min = str(time.struct_time(time.strptime(time.ctime())).tm_min)
 
             #for 1 min in future (for testing):
-            #hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour)%24)
-            #min = str((time.struct_time(time.strptime(time.ctime())).tm_min + 1)%60)
+            hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour)%24)
+            min = str((time.struct_time(time.strptime(time.ctime())).tm_min + 1)%60)
 
             schedule_time = hour+":"+min
-            
             unactioned_modqueue.put(item)
-
-            schedule.every().day.at(schedule_time).do(check_old_mod_queue_item)
+            schedule.every().day.at(schedule_time).do(check_old_mod_queue_item) #cancels after first run, so effectively just schedules the function to run once at schedule_time
 
             if len(modqueue) >= 4 and modqueue_is_full == False:
                 print("Full modqueue detected! Messaging mods..")
@@ -213,12 +200,13 @@ def check_comments():
 
     comments = list(subreddit.comments(limit=limit)) # sends request  
 
+    with open("seen_comments.txt", "r") as f:
+        seen_ids=f.read().split("\n")
+
     for comment in comments:
-        if comment.id not in seen_objects["comments"]:
-            seen_comments = seen_objects["comments"]
-            seen_comments.append(comment.id)
-            seen_objects["comments"] = seen_comments
-            seen_objects.sync()
+        if comment.id not in seen_ids:
+            with open("seen_comments.txt", "a") as f:
+                f.write(comment.id + "\n")
 
             try:
                 comment_author = comment.author.name.lower()
@@ -230,16 +218,15 @@ def check_comments():
                     comment.reply("lmao").mod.distinguish()
                     continue
 
-#                if comment_author != "asmr_bot":
-#                    reply = link_youtube_channel(comment_body)
-
-#                    # Reply will be the proposed reply to the comment
-#                    # if no reply is needed it will be empty
-#                    # so "if reply" will evaluate to False
-#                    if reply:
-#                        print("Replying to tagged channel..")
-#                        comment.reply(reply).mod.distinguish()
-#                        continue # don't carry out further checks
+                if comment_author != "asmr_bot":
+                    channels = re.findall(channel_name_regex, comment.body) #comment_body is lowercase; comment.body preserves capitalisation
+                    if len(channels) > 0:
+                        reply = ""
+                        for channel in channels:
+                            reply += link_youtube_channel(channel) + "\n\n"
+                        print("Replying to tagged channel(s)..")
+                        comment.reply(reply).mod.distinguish()
+                        continue # don't carry out further checks
                     
                 # moderator commands
                 if (comment_author in mod_list) and comment.banned_by is None: #if mod comment not removed..
@@ -251,27 +238,30 @@ def check_comments():
                             submission = r.submission(id=comment.parent_id[3:]) #will break here if command is not top-level comment
                             submission.mod.remove()
                             submission.reply(meta_explain.format(mod=comment_author)).mod.distinguish()
+                            continue
                         elif comment_body.startswith("!music"):
                             print("Removing submission in response to " + comment_author + " (music)")
                             remove_mod_comment(comment)
                             submission = r.submission(id=comment.parent_id[3:])
                             submission.mod.remove()
                             submission.reply(mus_explain.format(mod=comment_author)).mod.distinguish()
+                            continue
                         elif comment_body.startswith("!title"):
                             print("Removing submission in response to " + comment_author + " (bad title)")
                             remove_mod_comment(comment)
                             submission = r.submission(id=comment.parent_id[3:])
                             submission.mod.remove()
                             submission.reply(mod_title_explain.format(mod=comment_author)).mod.distinguish()
+                            continue
                     if comment_body.startswith("!remove"):
                         print("Removing submission in response to " + comment_author + " (remove by command)")
                         remove_mod_comment(comment)
-                        parent = get_parent(comment)
+                        parent = r.comment(id=comment.parent_id[3:])
                         parent.mod.remove()
                     elif comment_body.startswith("!warning"):
                         reason = comment_body[9:]
                         remove_mod_comment(comment)
-                        parent = get_parent(comment)
+                        parent = r.comment(id=comment.parent_id[3:])
                         if not user_is_subreddit_banned(parent.author.name):
                             # comment_author is mod who is giving the warning
                             print("Removing post in response to " + comment_author + " (add warning)")
@@ -284,7 +274,7 @@ def check_comments():
                     elif comment_body.startswith("!purge"):
                         print("Removing comment tree in response to " + comment_author + " (kill thread)")
                         try:
-                            parent = get_parent(comment)
+                            parent = r.comment(id=comment.parent_id[3:])
                             if parent.fullname[:2] == "t1":# comment
                                 purge_thread(parent)
                             else:
@@ -302,13 +292,13 @@ def check_comments():
                         if reason == "":
                             reason = "<No reason given>"
 
-                        parent = get_parent(comment)
+                        parent = r.comment(id=comment.parent_id[3:])
 
                         ban_user = parent.author.name
                         msg = "You have been banned by {mod} for [your post here]({link}). The moderator who banned you provided the following reason:\n\n**{reason}**"
 
                         try:
-                            print("Banning user {ban_user} for post {post}. Reason give: ""{reason}""".format(ban_user=ban_user, post=parent.id, reason=reason))
+                            print("Banning user {ban_user} for post {post}. Reason given: ""{reason}""".format(ban_user=ban_user, post=parent.id, reason=reason))
                             parent.mod.remove(False)
                             remove_mod_comment(comment)
                         
@@ -347,13 +337,14 @@ def check_submissions():
 
     submissions = list(subreddit.new(limit=limit))
 
+    with open("seen_submissions.txt", "r") as f:
+        seen_submissions = f.read().split("\n")
+
     for submission in submissions:
         try:
-            if submission.id not in seen_objects["submissions"]: 
-                seen_submissions = seen_objects["submissions"]
-                seen_submissions.append(submission.id)
-                seen_objects["submissions"] = seen_submissions
-                seen_objects.sync()
+            if submission.id not in seen_submissions:
+                with open("seen_submissions.txt", "a") as f:
+                    f.write(submission.id + "\n")
             
                 # for each new submission..
                 if(title_has_two_tags(submission.title)):
@@ -380,6 +371,9 @@ def check_submissions():
                             vid_id = get_vid_id(submission.url)
                             channel_id = get_youtube_video_data("videos", "snippet", "id", vid_id, "channelId")                  
                             removed = False
+                            
+                            recent_videos_cur.execute("Select * FROM recent_videos")
+                            past_videos = recent_videos_cur.fetchall()
 
                             if channel_id in banned_channels:
                                 submission.mod.remove(False) # checks for banned youtube channels
@@ -391,10 +385,10 @@ def check_submissions():
                                 submission.reply(unlisted_explain).mod.distinguish(sticky=True)
                                 print("Removed submission " + submission.shortlink + " (unlisted video)")
                                 removed = True
-                            elif vid_id in recent_video_data["videos"]: # submission is repost
-                                my_old_post = recent_video_data["videos"][vid_id]
+                            elif vid_id in [v[0] for v in past_videos]: # submission is repost
+                                post_detail = [v for v in past_videos if v[0] == vid_id][0]
                                 try:
-                                    old_post = r.submission(id=my_old_post.sub_ID)
+                                    old_post = r.submission(id=post_detail[2])
                                     if old_post is None or old_post.author is None or old_post.banned_by is not None: # if old post isn't live, i.e. is removed or deleted
                                         remove_post = False # allow repost since old one is gone
                                     else: 
@@ -405,6 +399,8 @@ def check_submissions():
                                 except (prawcore.exceptions.PrawcoreException, praw.exceptions.PRAWException):
                                     remove_post = False # assume repost is allowed by default; won't be removed
 
+                                #recent_videos(ID TEXT, SUBMISSION_DATE INT, REDDIT_ID TEXT
+
                                 if remove_post: # flag to show if it should be removed
                                     submission.mod.remove(False)
                                     comment = repost_explain.format(old_link=old_post.permalink)
@@ -412,12 +408,14 @@ def check_submissions():
                                     removed = True
                                     print("Removed submission " + submission.id + " (reposted video)")
 
+                            data = [vid_id, submission.created_utc, submission.id]
+                            recent_videos_cur.execute("INSERT INTO recent_videos VALUES (?,?,?)", data)
+                            recent_videos_db.commit()
+
                             if not removed: # successful submission (youtube links only)
-                                my_sub = my_submission_type()
-                                my_sub.sub_permalink = submission.permalink
-                                my_sub.sub_ID = submission.id
-                                my_sub.channel_ID = channel_id
-                                my_sub.date_created = submission.created_utc
+                                data = [submission.author.name.lower(), submission.id, submission.created_utc, submission.permalink, channel_id]
+                                user_submissions_cur.execute("INSERT into user_submissions VALUES (?,?,?,?,?)", list(data))
+                                user_submissions_db.commit()
 
                                 time.sleep(1)
                                 submission = r.submission(id=submission.id) # Refreshes submission; solves the "Nonetype has no attribute 'lower()'" issue..
@@ -427,58 +425,45 @@ def check_submissions():
                                     template_id = next(x for x in choices if x['flair_text'] == "ROLEPLAY")['flair_template_id'] #select flair template for ROLEPLAY flair
                                     submission.flair.select(template_id, "ROLEPLAY") #set slair with text of "ROLEPLAY"
                                     print("Reflaired submission " + submission.id + " as roleplay.")
-                                    
-                                recent_videos_copy = recent_video_data["videos"]
-                                recent_videos_copy[vid_id] = my_sub # add submission info to temporary dict
-                                recent_video_data["videos"] = recent_videos_copy # copy new dict to shelve (can't add to shelve dict directly)
 
                                 # now check if user has submitted three videos of same channel
-                                
-                                if submission.author.name not in user_submission_data["submissions"]:
-                                    subs = user_submission_data["submissions"]
-                                    subs[submission.author.name] = [my_sub]
-                                    user_submission_data["submissions"] = subs
-                                else:
-                                    user_submission_list = user_submission_data["submissions"][submission.author.name]
-                                    count = 1 # there's already one in submission, don't forget to count that!
-                                
-                                    for _submission in user_submission_list:
-                                        live_submission = r.submission(id = _submission.sub_ID) # update object (might have been removed etc)
 
-                                        if (not submission_is_deleted(live_submission.id)) and live_submission.banned_by is None: # if submission isn't deleted or removed
-                                            if _submission.channel_ID == channel_id:
-                                                count += 1
+                                user_submissions_cur.execute("SELECT * FROM user_submissions WHERE USERNAME=?", [submission.author.name.lower()])
+                                user_submission_list = user_submissions_cur.fetchall() #list of type [[name, id, time, link, channel]]
+                                
+                                count = 0
 
-                                    if count >= 3: # 3 or more submissions to same channel in past day
-                                        
-                                        submission_links = submission.permalink + "\n\n" #start the newline-separated list of submission links
+                                for db_submission in user_submission_list:
+                                    live_submission = r.submission(id = db_submission[1]) # update object (might have been removed etc)
+
+                                    if (not submission_is_deleted(live_submission.id)) and live_submission.banned_by is None: # if submission isn't deleted or removed
+                                        if db_submission[4] == channel_id:
+                                            count += 1
+
+                                if count >= 3: # 3 or more submissions to same channel in past day
+                                    submission_links = submission.permalink + "\n\n" #start the newline-separated list of submission links
                                     
-                                        for s in user_submission_list:
-                                            submission_links += s.sub_permalink + "\n\n"
-                                            sub_to_remove = r.submission(id=s.sub_ID)
-                                            sub_to_remove.mod.remove(False)
+                                    for s in user_submission_list:
+                                        submission_links += s[3] + "\n\n"
+                                        sub_to_remove = r.submission(id=s[1])
+                                        sub_to_remove.mod.remove(False)
 
-                                        user_submission_data["submissions"][submission.author.name] = [] # clear the list (user is banned anyway)
+                                    user_submissions_cur.execute("DELETE FROM user_submissions WHERE USERNAME=?", [submission.author.name.lower()]) # clear the list (user is banned anyway)
+                                    user_submissions_db.commit()
 
-                                        submission.mod.remove(False)
-                                        submission.reply(spam_explain).mod.distinguish(sticky=True) # doesn't mention ban length
-                                        duration = new_warning(submission, "asmr_bot", "spam", spam_warning=True)
+                                    submission.mod.remove(False)
+                                    submission.reply(spam_explain).mod.distinguish(sticky=True) # doesn't mention ban length
+                                    duration = new_warning(submission, "asmr_bot", "spam", spam_warning=True)
 
-                                        if duration == 1:
-                                            duration = "1 day only"
-                                        else:
-                                            duration = str(duration) + " days"
-
-                                        subreddit.message(subject="Ban Notification", message="I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **" + duration + "**.\n\nLinks to the offending submissions:\n\n" + submission_links + "\n\n/r/asmr/about/banned")
-
-                                        print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
-                                        
+                                    if duration == 1:
+                                        duration = "1 day only"
+                                    elif duration is None:
+                                        duration = "forever"
                                     else:
-                                        subs = user_submission_data["submissions"]  # copy dict
-                                        l = subs[submission.author.name] # get list of user submissions
-                                        l.append(my_sub) # append submission to list
-                                        subs[submission.author.name] = l # update dict value
-                                        user_submission_data["submissions"] = subs # write dict back to shelve 
+                                        duration = str(duration) + " days"
+
+                                    subreddit.message(subject="Ban Notification", message="I have banned /u/" + submission.author.name + " for spammy behaviour (submitting three links to the same youtube channel in a 24-hour period). The ban will last **" + duration + "**.\n\nLinks to the offending submissions:\n\n" + submission_links + "\n\n/r/asmr/about/banned")
+                                    print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
                     except Exception as ex:
                         print("exception on processing of submission " + submission.shortlink + " - " + str(ex))
                    
@@ -489,9 +474,10 @@ def check_submissions():
                 continue
             else:
                 raise
+
+
 def check_messages():
     messages = list(r.inbox.unread())
-    print([message.body + "\n\n" for message in messages])
 
     for message in messages:
         try:
@@ -535,7 +521,7 @@ def check_messages():
                                     video_count = int(get_youtube_video_data("channels", "statistics", "forUsername", channel_name, "videoCount"))
 
                                 if video_count >= 15:
-                                    if not user_is_too_new(message.author):
+                                    if not user_is_inactive(message.author):
                                         if "hey /r/asmr mods!" in description.lower():
                                             try:
                                                 global subreddit
@@ -596,47 +582,38 @@ def remove_mod_comment(comment):
     else:
         comment.mod.remove()
 
-def get_parent(comment):
-    """Returns the parent comment or submission of a given comment"""
 
-    if comment.parent_id[:2] == "t1": #comment
-        return r.comment(id=comment.parent_id[3:])
-    elif comment.parent_id[:2] == "t3": #submission
-        return r.submission(id=comment.parent_id[3:])
-    else:
-        return None
+def link_youtube_channel(name):
 
-#def link_youtube_channel(comment):
-#    TODO: do a youtube search for the channel rather than a lookup
-#    m = re.compile("\[\[([^\]]*)\]\]")
-#    matches = re.findall(m, comment)
-#    channels = {}
+    URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername={name}&key=" + g_browser_key).format(name=name.replace(" ", ""))
+    response = requests.get(URL)
 
-#    for channel in matches:
-#        for name_list in taggable_channels:
-#            if channel in name_list:
-#                channels[channel] = taggable_channels[name_list]
-#                break # breaks out of the for name_list loop
+    if response.status_code == 200:
+        try:
+            json = response.json()
+            id = json["items"][0]["id"]
+            video_count = "{:,}".format(int(json["items"][0]["statistics"]["videoCount"]))
+            view_count = "{:,}".format(int(json["items"][0]["statistics"]["viewCount"]))
+            subscribers = "{:,}".format(int(json["items"][0]["statistics"]["subscriberCount"]))
+            link = "https://www.youtube.com/channel/" + id
 
-#    footer = "\n\n----\n\n[^Add ^a ^channel ^to ^be ^tagged!](/r/asmr/wiki/channel_tags) ^| [^Broken ^link? ^Let ^me ^know](https://www.reddit.com/message/compose?to=theonefoster&subject=broken tag link)"
+            URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id={id}&key=" + g_browser_key).format(id=id)
+            json = requests.get(URL).json()
+            channel_title = json["items"][0]["snippet"]["title"]
 
-#    if len(channels) > 0:
+            table = ("""Channel Link|[{name}]({link})
+---|---
+Number of Videos|{videos}
+Total views|{views}
+Subscribers|{subs}
+""".format(videos=video_count, views=view_count, subs=subscribers, name=channel_title, link=link))
+        
+            return table
+        except (KeyError, AttributeError, IndexError):
+            return("I couldn't find a youtube channel with the name \"{name}\".".format(name=name))
 
-#        if len(channels) > 1: # multiple matches
-#            reply = "Here is a list of the youtube channels you tagged:\n\n{list}"
-#        else: # one match
-#            reply = "Here is the youtube channel you tagged:\n\n{list}"
-
-#        list = ""
-#        url = "https://www.youtube.com/channel/{id}"
-
-#        for channel in channels.keys():
-#            link = url.format(id = channels[channel])
-#            list += "* [{channel}]({link})\n\n".format(channel=channel.title(), link=link)
-
-#        return reply.format(list=list) + footer
-#    else:
-#        return ""
+    else: #NOT FOUND
+        return("I couldn't find a youtube channel with the name \"{name}\".".format(name=name))
     
 def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
     toplist = shelve.open("topPosts","c")
@@ -691,11 +668,31 @@ def recommend_top_submission():
 
     return rtn
 
-def user_is_too_new(user): #works in bot_5
-    if user.created_utc > time.time()-(60*60*24*182): #account is LESS than 6 months (182 days) old
+def user_is_inactive(user): #works in bot_5
+    if user.created_utc > time.time()-(60*60*24*120): #reddit account is LESS than 4 months (182 days) old
         return True
-    else:
-        return False
+
+    comment_count = 0 #look for 5 comments in /r/asmr
+    submission_ids = set()
+
+    for comment in user.comments.new(limit=1000):
+        if comment.created_utc < time.time()-(60*60*24*151): #yielding comments from over 5 months ago
+            return True #not enough comments in last 6 months
+        elif comment.created_utc > time.time()-(60*60*24*28):
+            continue #don't count comments from the past 28 days
+
+        if (comment.subreddit.display_name == "asmr" and 
+            comment.submission.author.name != user.name and #don't count comments on own submissions
+            comment.submission.id not in submission_ids): #don't count more than one comment on a given submission
+                submission_ids.add(comment.submission.id)
+                comment_count += 1 #count comments in r/asmr
+                if comment_count >=5:
+                    break #enough comments found; continue checks
+    else: #didn't break the for loop
+        return True #not enough comments in last 6 months
+
+    return False #all tests passed; user is not inactive.
+
 
 def submission_is_deleted(id):
     """Returns True if a submission has been deleted. Does not work for comments."""
@@ -723,9 +720,9 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
         msg_intro = "You have received an automatic warning ban because of your post [here]({link}).\n\n"
 
     if reason != "":
-        reason_text = "The moderator who invoked this ban, /u/{mod}, gave the following reason: **\"" + reason + "\"**\n\n"
+        reason_text = "The moderator who invoked this ban, /u/{mod}, gave the following reason: \n\n>**" + reason + "**\n\n"
     else:
-        reason_text = "The moderator who invoked this ban, /u/{mod}, did not provide a reason for the ban.**\n\n"
+        reason_text = "The moderator who invoked this ban, /u/{mod}, did not provide a reason for the ban.\n\n"
         if spam_warning:
             reason = "spam"
         else:
@@ -746,37 +743,42 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
     db_result = warnings_cursor.fetchall()
 
     previous_bans = len(db_result) # count number of previous bans
-    user_has_previous_warning = previous_bans > 0
+    ban_nums = [ban[5] for ban in db_result]
 
-    if user_has_previous_warning:
-        spam_warning = False #can't give a spam warning if it's not the first warning
+    if previous_bans == 0 and spam_warning:
+        ban_number = 0
+    else:
+        if 0 in ban_nums:
+            ban_number = previous_bans
+        else:
+            ban_number = previous_bans + 1
 
-    if spam_warning: #add zeroeth (spam) warning
+    if ban_number == 0: #add zeroeth (spam) warning (user only qualifies if no previous warnings)
         reason_text = ""
         duration = 1
         description = ("This warning is to give you an opportunity to read the subreddit and site-wide rules on self-promotion and spam."+
                        "\n\nThis is your soft warning, which is accompanied by a 1-day subreddit ban. " + 
                        "Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again.") 
-    elif previous_bans == 0: # or user has a single past spam warning 
+    elif ban_number == 1:
         duration = 7
         description = ("This is your first official warning, which is accompanied by a 7-day subreddit ban. " +
                         "Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again. " +
                         "If you message the moderators referencing the rule that you broke and how you broke it, we **may consider** unbanning you early.")
-    elif previous_bans == 1:
+    elif ban_number == 2:
         duration = 30
         description = ("**This is your final warning**, which is accompanied by a 30-day subreddit ban; " +
                         "if you receive another warning, you will be permanently banned. " +
-                        "Please take 2 minutes to read [our subreddit rules](/r/asmr/wiki) before participating in the community again.")
-    elif previous_bans >= 2: #should never be >2 though unless they get a third warning and are then manually unbanned.. then get another warning
-        description = "This is your third warning, meaning you are now permanently banned."
+                        "Please take this opportunity to read [our subreddit rules](/r/asmr/wiki) before participating in the community again.")
+    elif ban_number >= 2: #should never be >2 though, unless they get a third warning and are then manually unbanned then get another warning
+        description = "You have ignored multiple previous warnings and continued to break our subreddit rules, meaning you are now permanently banned."
         duration = None
         
-    ban_date = datetime.date.today()
+    ban_date = int(time.time())
     msg = msg_intro + reason_text + description
     print("Adding ban for user " + user + ". (reason: " + reason + ")")
     subreddit.banned.add(post.author, duration=duration, note=note, ban_message=msg)
 
-    warnings_cursor.execute("INSERT INTO warnings VALUES(?,?,?,?,?)",  [user, link, banning_mod, reason, ban_date])
+    warnings_cursor.execute("INSERT INTO warnings VALUES(?,?,?,?,?,?)",  [user, link, banning_mod, reason, ban_date, ban_number])
     warnings_db.commit()
     update_warnings_wiki()
 
@@ -828,7 +830,7 @@ def title_is_caps(title):
     normalised_title = "".join(word for word in tails) # merge words back together
     capitals = "".join(char for char in normalised_title if char.upper() == char) # copy only capitals
     
-    if len(capitals) >= 0.2 * len(normalised_title): #if capitals are 20% of remaining title
+    if len(capitals) >= 2 and len(capitals) >= 0.2 * len(normalised_title): #if capitals are 20% of remaining title
         return True
     else:
         return False
@@ -848,16 +850,13 @@ def is_channel_or_playlist_link(url):
         return False
 
 def is_youtube_link(url):
-    if ((".youtube." in url or "youtu.be" in url)
-        and not("playlist"  in url
-             or "list="     in url 
-             or "/channel/" in url 
-             or "/user/"    in url
-               )
-       ):
-        return True
-    else:
-        return False
+    return ((".youtube." in url or "youtu.be" in url)
+            and not("playlist"  in url or
+                    "list="     in url or 
+                    "/channel/" in url or
+                    "/user/"    in url
+                   )
+           )
         
 def is_roleplay(title, vid_id):
     try:
@@ -900,49 +899,25 @@ def remove_ffaf(): # called from schedule where parameters can't be used
         pass
 
 def clear_user_submissions():
-    # user_submission_data is a dict containing usernames as keys and lists as values
-    # Each user's dict value is a list of my_submission_type objects, representing 
-    # every submission they've made in the last 24 hours
-
-    submissions = user_submission_data["submissions"]
-    users = list(submissions.keys())
-
-    for user in users:
-        if user == "un" and len(users) > 2: # if database is reset, dummy data is inserted as a placeholder. Remove this.
-            del submissions["un"] # "un" is an invalid reddit username so this is safe.
-            continue
-        submissions_by_user = submissions[user] 
-        temp = list(submissions_by_user)
-        for s in temp:
-            if s.date_created < (time.time()-86400): # if the submission was over 24 hours ago
-                submissions_by_user.remove(s) # remove it from the list
-
-        if len(submissions_by_user) == 0: # and if there are no submissions by that user in the past 24 hours
-            del submissions[user] # remove the user's key from the dict       
-        elif len(submissions[user]) != len(submissions_by_user):
-                submissions[user] = submissions_by_user # update submissions log
-
-    user_submission_data["submissions"] = submissions
+    #Clean up database - only care about submissions in last 24 hours.
+    user_submissions_cur.execute("DELETE from user_submissions WHERE SUBMISSION_DATE < ?", [time.time()-86400])
 
 def update_seen_objects():
-    done_submissions = seen_objects["submissions"][-100:] # trim to only 100 subs
-    seen_objects["submissions"] = done_submissions
-    done_comments = seen_objects["comments"][-100:] # trim to only 100 comments
-    seen_objects["comments"] = done_comments
-    seen_objects.sync()
+    with open("seen_comments.txt", "r") as f:
+        seen_comments = f.read().split("\n")
+
+    with open("seen_submissions.txt", "r") as f:
+        seen_submissions = f.read().split("\n")
+
+    with open("seen_comments.txt", "w") as f:
+        f.write("\n".join(id for id in seen_comments[-200:]))
+
+    with open("seen_submissions.txt", "w") as f:
+        f.write("\n".join(id for id in seen_submissions[-200:]))
 
 def clear_video_submissions():
-    submissions_dict = recent_video_data["videos"]
-
-    dict_keys = list(submissions_dict.keys())
-    
-    for key in dict_keys:
-        if key == "id" and len(dict_keys) > 2:
-            del submissions_dict[key]
-        elif submissions_dict[key].date_created < (time.time() - 7948800): # if submission was more than 3 months ago
-            del submissions_dict[key]
-
-    recent_video_data["videos"] = submissions_dict
+    #Clean up database - only care about reposted videos from past 3 months
+    recent_videos_cur.execute("DELETE FROM recent_videos WHERE SUBMISSION_DATE < ?", [time.time() - 7948800])
 
 def get_banned_channels(): #tesdted in bot_5, works
     global banned_channels
@@ -962,32 +937,23 @@ def update_warnings_wiki():
     warned_users = dict()
 
     for war in db_result:
-        username, link, mod, reason, date = war
+        username, link, mod, reason, date, ban_num = war
         if username not in warned_users:
-            if reason == "spam" and mod == "asmr_bot":
-                warned_users[username] = [(link, mod, reason, str(date), 0)]
-            else:
-                warned_users[username] = [(link, mod, reason, str(date), 1)]
+            warned_users[username] = [(link, mod, reason, str(date), ban_num)]
         else:
             bans = warned_users[username] # must be of length >= 1
-            
-            ban_numbers = [ban[4] for ban in bans] # must be of length >= 1
-
-            if 0 in ban_numbers: # user has a zeroth (spam) warning
-                ban_number = len(bans)
-            else: # user does not have zeroth (spam) warning
-                ban_number = len(bans) + 1
-
-            bans.append((link, mod, reason, date, ban_number))
+            bans.append((link, mod, reason, date, ban_num))
             warned_users[username] = bans
 
-    page = "Name | Post | Banned by | Reason given | Date banned | Status\n---|---|---|---|---|---\n"
+    page = "Name | Post | Banned by | Reason for ban | Date banned | Status\n---|---|---|---|---|---\n"
 
     for user in warned_users.keys():
         bans = warned_users[user]
         warnings = len(bans)
 
         page = page + "/u/" + user
+
+        readable_date = lambda x: str(datetime.datetime.fromtimestamp(int(x)).strftime('%Y-%m-%d'))
        
         for ban in bans:
             link, mod, reason, date, ban_number = ban
@@ -1000,7 +966,7 @@ def update_warnings_wiki():
             else:
                 status = "Permanent"
 
-            page = page + " | " + link + " | " + "/u/" + mod + " | " + reason + " | " + str(date) + " | " + status + "\n"
+            page = page + " | " + link + " | " + "/u/" + mod + " | " + reason + " | " + readable_date(date) + " | " + status + "\n"
 
     subreddit.wiki["warnings"].edit(page)
 
@@ -1011,18 +977,17 @@ def user_is_subreddit_banned(username): #tested, works
     return username.lower() in names
 
 def asmr_bot():
-    #schedule.run_pending()
-    #check_submissions()
-    #check_comments()
+    schedule.run_pending()
+    check_submissions()
+    check_comments()
     #check_messages()
     #check_mod_queue()
-    pass
 
 ## ----------------------------
 ## END OF FUNCTIONS
 ## ----------------------------
 
-r = praw.Reddit("theonefoster")
+r = praw.Reddit("asmr_bot")
 print("Logged in as ", end="")
 print(r.user.me())
 subreddit = r.subreddit("asmrmodtalk")
@@ -1030,19 +995,18 @@ subreddit = r.subreddit("asmrmodtalk")
 
 ###### TEST CODE GOES HERE
 
-check_messages()
-
-#input()
-#exit()
+print(user_is_inactive(r.redditor("theonefoster")))
+input()
+exit()
 
 ###### END OF TEST CODE
-
 
 if __name__ == "__main__":
     tof = praw.Reddit("theonefoster")
     
     print("Fetching banned channels..")
     get_banned_channels()
+    update_warnings_wiki()
 
     schedule.every().thursday.at("23:50").do(remove_ffaf)
     schedule.every(14).days.at("03:00").do(update_top_submissions) # once per fortnight ish
@@ -1051,10 +1015,10 @@ if __name__ == "__main__":
     schedule.every().day.at("02:00").do(clear_video_submissions) # once per day
     schedule.every(4).hours.do(get_banned_channels) # 6 times per day
 
-    print("Updating submissions databases..")
-    clear_user_submissions()
+    print("Updating submissions files..")
+    #clear_user_submissions()
     update_seen_objects()
-    clear_video_submissions()
+    #clear_video_submissions()
 
     print("Setup complete. Starting bot duties.")
 
@@ -1064,32 +1028,17 @@ if __name__ == "__main__":
         try:
             asmr_bot()
             exponential_dropoff = 5
-            time.sleep(1)
         except prawcore.exceptions.ServerError as e:
             try:
                 print("Server Exception: " + str(e))
                 #traceback.print_exc()
                 time.sleep(exponential_dropoff) #usually 503 so just try again soon
-                exponential_dropoff *= 3
+                exponential_dropoff *= 2
             except Exception as e:
                 print("Unknown exception: " + str(e))
                 traceback.print_exc()
                 print("Sleeping..")
-                time.sleep(30) # usually 503. Sleeping reduces reddit load.
+                time.sleep(30) #unknown error. Sleeping reduces reddit load.
         finally:
-
-            recent_video_data.sync()
-            user_submission_data.sync()
-            seen_objects.sync()
-
-            recent_video_data.close()
-            user_submission_data.close()
-            seen_objects.close()
-
-            user_submission_data = shelve.open("user_submission_data", "c") # all submissions from past day by author
-            recent_video_data = shelve.open("recent_video_data", "c") # videos submitted over past 3 months
-            seen_objects = shelve.open("seen_objects", "c") # track which objects have been seen
-
             first_run = False
-
-            time.sleep(5) # reduces reddit load and unnecessary processor usage
+            time.sleep(1) # reduces reddit load and unnecessary processor usage
