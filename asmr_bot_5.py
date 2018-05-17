@@ -31,6 +31,7 @@ modqueue_is_full = True # if bot is restarted it will wait for empty modqueue be
 unactioned_modqueue = queue.Queue(0)
 first_run = True # does a lot more processing on first run to catch up with anything missed during downtime
 first_run_backcheck = 100
+general_backcheck = 6
 banned_channels = set()
 
 # Messages
@@ -64,7 +65,7 @@ print("Opening databases..")
 
 warnings_db = sqlite3.connect('warnings.db', detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) # for warnings database
 warnings_cursor = warnings_db.cursor()
-warnings_cursor.execute("CREATE TABLE IF NOT EXISTS warnings(NAME TEXT, LINK TEXT, BANNING_MOD TEXT, REASON TEXT, BAN_DATE INT, BAN_NUM INT)")
+warnings_cursor.execute("CREATE TABLE IF NOT EXISTS warnings(NAME TEXT, LINK TEXT, BANNING_MOD TEXT, REASON TEXT, TIMESTAMP INT, BAN_NUM INT)")
 warnings_db.commit()
 
 user_submissions_db = sqlite3.connect("user_submissions.db")
@@ -196,7 +197,7 @@ def check_comments():
     global user_submission_data
     global recent_video_data # shouldn't really need these but seems not to work on linux without them
 
-    limit = first_run_backcheck if first_run else 6
+    limit = first_run_backcheck if first_run else general_backcheck
 
     comments = list(subreddit.comments(limit=limit)) # sends request  
 
@@ -333,7 +334,7 @@ def check_submissions():
     global user_submission_data
     global seen_objects # shouldn't really need these but seems not to work on linux without them
 
-    limit = first_run_backcheck if first_run else 6
+    limit = first_run_backcheck if first_run else general_backcheck
 
     submissions = list(subreddit.new(limit=limit))
 
@@ -682,7 +683,7 @@ def user_is_inactive(user): #works in bot_5
             continue #don't count comments from the past 28 days
 
         if (comment.subreddit.display_name == "asmr" and 
-            comment.submission.author.name != user.name and #don't count comments on own submissions
+           (comment.submission.author is None or comment.submission.author.name != user.name) and #don't count comments on own submissions. Count comments on deleted submissions.
             comment.submission.id not in submission_ids): #don't count more than one comment on a given submission
                 submission_ids.add(comment.submission.id)
                 comment_count += 1 #count comments in r/asmr
@@ -898,11 +899,11 @@ def remove_ffaf(): # called from schedule where parameters can't be used
     except prawcore.NotFound as e: # if there's no sticky it'll throw a 404 Not Found
         pass
 
-def clear_user_submissions():
+def clear_user_submissions(): #works
     #Clean up database - only care about submissions in last 24 hours.
     user_submissions_cur.execute("DELETE from user_submissions WHERE SUBMISSION_DATE < ?", [time.time()-86400])
 
-def update_seen_objects():
+def update_seen_objects(): #works
     with open("seen_comments.txt", "r") as f:
         seen_comments = f.read().split("\n")
 
@@ -914,6 +915,7 @@ def update_seen_objects():
 
     with open("seen_submissions.txt", "w") as f:
         f.write("\n".join(id for id in seen_submissions[-200:]))
+
 
 def clear_video_submissions():
     #Clean up database - only care about reposted videos from past 3 months
@@ -932,23 +934,25 @@ def get_banned_channels(): #tesdted in bot_5, works
 
 def update_warnings_wiki():
     warnings_cursor.execute("SELECT * FROM warnings")
-    db_result = warnings_cursor.fetchall()
+    db_result = sorted(warnings_cursor.fetchall(), key=lambda x: x[4])
 
-    warned_users = dict()
+    user_warnings = dict() #dict of form {username: [(ban info)]}
+    warned_user_list = [] #list of users sorted by date first banned
 
     for war in db_result:
         username, link, mod, reason, date, ban_num = war
-        if username not in warned_users:
-            warned_users[username] = [(link, mod, reason, str(date), ban_num)]
+        if username not in user_warnings:
+            warned_user_list.append(username)
+            user_warnings[username] = [(link, mod, reason, str(date), ban_num)]
         else:
-            bans = warned_users[username] # must be of length >= 1
+            bans = user_warnings[username] # must be of length >= 1
             bans.append((link, mod, reason, date, ban_num))
-            warned_users[username] = bans
+            user_warnings[username] = bans
 
     page = "Name | Post | Banned by | Reason for ban | Date banned | Status\n---|---|---|---|---|---\n"
 
-    for user in warned_users.keys():
-        bans = warned_users[user]
+    for user in warned_user_list:
+        bans = user_warnings[user]
         warnings = len(bans)
 
         page = page + "/u/" + user
@@ -980,8 +984,8 @@ def asmr_bot():
     schedule.run_pending()
     check_submissions()
     check_comments()
-    #check_messages()
-    #check_mod_queue()
+    check_messages()
+    check_mod_queue()
 
 ## ----------------------------
 ## END OF FUNCTIONS
@@ -991,13 +995,9 @@ r = praw.Reddit("asmr_bot")
 print("Logged in as ", end="")
 print(r.user.me())
 subreddit = r.subreddit("asmrmodtalk")
-#lounge = r.subreddit("asmrcreatorlounge")
+lounge = r.subreddit("asmrcreatorlounge")
 
 ###### TEST CODE GOES HERE
-
-print(user_is_inactive(r.redditor("theonefoster")))
-input()
-exit()
 
 ###### END OF TEST CODE
 
@@ -1016,9 +1016,9 @@ if __name__ == "__main__":
     schedule.every(4).hours.do(get_banned_channels) # 6 times per day
 
     print("Updating submissions files..")
-    #clear_user_submissions()
+    clear_user_submissions()
+    clear_video_submissions()
     update_seen_objects()
-    #clear_video_submissions()
 
     print("Setup complete. Starting bot duties.")
 
@@ -1041,4 +1041,4 @@ if __name__ == "__main__":
                 time.sleep(30) #unknown error. Sleeping reduces reddit load.
         finally:
             first_run = False
-            time.sleep(1) # reduces reddit load and unnecessary processor usage
+            time.sleep(7) # reduces reddit load and unnecessary processor usage
