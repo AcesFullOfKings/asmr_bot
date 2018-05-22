@@ -595,7 +595,17 @@ def remove_mod_comment(comment):
         comment.mod.remove()
 
 def link_youtube_channel(name):
-    URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername={name}&key=" + g_browser_key).format(name=name)#.replace(" ", ""))
+    channel_id = ""
+
+    for channel_names in taggable_channels:
+        if name in channel_names:
+            channel_id = taggable_channels[channel_names] #check if the Id is in the commonly-used list
+
+    if channel_id == "": #if not, request details using the tagged name
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername={name}&key=" + g_browser_key).format(name=name)
+    else: #if channel name is identified, use the ID to avoid linking the wrong channel
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&id={id}&key=" + g_browser_key).format(id=channel_id)
+
     response = requests.get(URL)
 
     if response.status_code == 200:
