@@ -57,9 +57,6 @@ vid_id_regex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)
 attribution_regex = re.compile("\/attribution_link\?.*v%3D([^%&]*)(%26|&|$)")
 channel_name_regex = re.compile("\[\[(.*?)\]\]")
 
-# open shelves
-toplist = shelve.open("topPosts","c")
-
 # Open sql databases
 print("Opening databases..")
 
@@ -79,17 +76,16 @@ recent_videos_cur.execute("CREATE TABLE IF NOT EXISTS recent_videos(ID TEXT, SUB
 recent_videos_db.commit()
 
 with open("seen_comments.txt", "a+") as f:
-   pass #guarantee that the file exists. Use a with() block to access info.
+   pass # guarantees that the file exists: creates it if it doesn't.
 
 with open("seen_submissions.txt", "a+") as f:
-   pass
+   pass # ditto
 
 # ----------------------
 # BEGIN FUNCTIONS
 # ----------------------
 
 def get_youtube_video_data(location, part, input_type, input_val, return_val):
-
     # read like "from LOCATION, get the PART where INPUT_TYPE is INPUT_VAL and return RETURN_VAL"
     # where location is channels/videos, part is statistics/snippet/status, type is id or fromUsername, val is the search value, return value is the data you want
      
@@ -160,12 +156,12 @@ def check_mod_queue(): #tested - works
             viewed_mod_queue.add(item.fullname)
 
             #for 4 hours in future:
-            #hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour + 4)%24)
-            #min = str(time.struct_time(time.strptime(time.ctime())).tm_min)
+            hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour + 4)%24)
+            min = str(time.struct_time(time.strptime(time.ctime())).tm_min)
 
             #for 1 min in future (for testing):
-            hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour)%24)
-            min = str((time.struct_time(time.strptime(time.ctime())).tm_min + 1)%60)
+            #hour = str((time.struct_time(time.strptime(time.ctime())).tm_hour)%24)
+            #min = str((time.struct_time(time.strptime(time.ctime())).tm_min + 1)%60)
 
             schedule_time = hour+":"+min
             unactioned_modqueue.put(item)
@@ -279,7 +275,7 @@ def check_comments():
                             if parent.fullname[:2] == "t1":# comment
                                 purge_thread(parent)
                             else:
-                                r.redditor(comment_author).message(subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.") # todo: wat
+                                r.redditor(comment_author).message(subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.")
                            
                             remove_mod_comment(comment)
                         except Exception as e:
@@ -362,7 +358,7 @@ def check_submissions():
                     submission.reply(capital_explain).mod.distinguish(sticky=True)
                     r.redditor("theonefoster").message(subject="Upper case title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
                     print("Removed submission " + submission.id + " for having an uppercase title.")
-                elif ("youtube" in submission.url or "youtu.be" in submission.url):
+                elif ("youtube." in submission.url or "youtu.be" in submission.url):
                     try:
                         if is_channel_or_playlist_link(submission.url):
                             submission.mod.remove(False)
@@ -441,9 +437,7 @@ def check_submissions():
                                         if db_submission[4] == channel_id:
                                             count += 1
 
-                                if count >= 3: # 3 or more submissions to same channel in past day
-                                    submission_links = submission.permalink + "\n\n" #start the newline-separated list of submission links
-                                    
+                                if count >= 3: # 3 or more submissions to same channel in past day                                    
                                     for s in user_submission_list:
                                         submission_links += s[3] + "\n\n"
                                         sub_to_remove = r.submission(id=s[1])
@@ -467,15 +461,14 @@ def check_submissions():
                                     print("Removed submission " + submission.id + " and banned user /u/" + submission.author.name + " for too many links to same youtube channel")
                     except Exception as ex:
                         print("exception on processing of submission " + submission.shortlink + " - " + str(ex))
-                   
-                        if "ran out of input" in str(ex).lower():
-                            break
+                        traceback.print_exc()
+                        #if "ran out of input" in str(ex).lower(): #shouldn't get this any more since switching to database storage over shelve storage
+                        #    break
         except praw.exceptions.APIException as ex:
             if ex.error_type == 'TOO_OLD': #post is archived so can't be commented on
                 continue
             else:
                 raise
-
 
 def check_messages():
     messages = list(r.inbox.unread())
@@ -536,7 +529,7 @@ def check_messages():
                                                 print("Verified and set flair for " + user)
                                             except Exception as ex:
                                                 message.reply(replies.unknown_error)
-                                                r.redditor("theonefoster").message(subject="Failed flair assignment", message="/u/" + user + " passed flair eligibility but flair assignment failed. Please ensure their flair is set correctly on /r/asmr and /r/asmrCreatorLounge, and that they are an approved submitter on both subreddits. \n\nChannel was: " + channel_name + "\n\n Exception was: " + ex.message)
+                                                r.redditor("theonefoster").message(subject="Failed flair assignment", message="/u/" + user + " passed flair eligibility but flair assignment failed. Please ensure their flair is set correctly on /r/asmr and /r/asmrCreatorLounge, and that they are an approved submitter on both subreddits. \n\nChannel was: " + channel_name + "\n\n Exception was: " + str(ex))
                                         else:
                                             message.reply(replies.no_verification)
                                             print("flair verification for " + channel_name + " failed - no verification message.")
@@ -564,8 +557,12 @@ def check_messages():
                     print("Command not recognised. Message was " + message.body)
                     message.reply(replies.command_not_recognised)
             else:
-                print("Replying to comment in messages..")
-                message.reply(comment_reply).mod.distinguish()
+                channels = re.findall(channel_name_regex, message.body)
+                if len(channels) == 0:
+                    print("Replying to comment in messages..")
+                    message.reply(comment_reply).mod.distinguish()
+                else:
+                    pass #double tag detected in message, so it will be dealt with in check_comments
         except prawcore.exceptions.Forbidden as ex: # probably tried to distinguish comment in other subreddit
             pass
         except Exception as ex:
@@ -575,18 +572,16 @@ def check_messages():
 
 def remove_mod_comment(comment):
     """If comment was made by me, I have the authentication to delete it, which is preferred. 
-    Otherwise Remove it since I can't delete other mods' comments
-    """
+    Otherwise Remove it since I can't delete other mods' comments"""
+
     if comment.author.name == "theonefoster":
         my_comment = tof.comment(id = comment.id) #re-fetch the comment with my personal credentials
         my_comment.delete() #delete comment while authenticated as u/theonefoster
     else:
         comment.mod.remove()
 
-
 def link_youtube_channel(name):
-
-    URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername={name}&key=" + g_browser_key).format(name=name.replace(" ", ""))
+    URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername={name}&key=" + g_browser_key).format(name=name)#.replace(" ", ""))
     response = requests.get(URL)
 
     if response.status_code == 200:
@@ -602,12 +597,11 @@ def link_youtube_channel(name):
             json = requests.get(URL).json()
             channel_title = json["items"][0]["snippet"]["title"]
 
-            table = ("""Channel Link|[{name}]({link})
----|---
-Number of Videos|{videos}
-Total views|{views}
-Subscribers|{subs}
-""".format(videos=video_count, views=view_count, subs=subscribers, name=channel_title, link=link))
+            table = ("Channel Link|[{name}]({link})\n" + 
+                     "---|---\n" +
+                     "Number of Videos|{videos}\n" +
+                     "Total views|{views}\n" +
+                     "Subscribers|{subs}").format(videos=video_count, views=view_count, subs=subscribers, name=channel_title, link=link)
         
             return table
         except (KeyError, AttributeError, IndexError):
@@ -618,7 +612,7 @@ Subscribers|{subs}
     
 def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
     toplist = shelve.open("topPosts","c")
-    submissions = r.subreddit("asmr").top(limit=1000) #TODO after testing revert this to use subreddit.top
+    submissions = subreddit.top(limit=1000)
     added_count = 0
     total_count = 0
     goal = 750
@@ -662,12 +656,20 @@ def recommend_top_submission():
     if title == "":
         title = "this video"
 
-    rtn = "How about [" + title + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
+    message = ("How about [{title}]({URL}) by {channel}?\n\n"
+               "[(Reddit link)]({permalink})\n\n"
+               "If you don't like this video, reply with \"!recommend\" and I'll find you another one.")
+    
+    URL = toplist[str(rand)]["URL"]
+    channel = toplist[str(rand)]["Channel"]
+    permalink = toplist[str(rand)]["Reddit Link"]
+    
+    #rtn = "How about [" + title + "](" + (toplist[str(rand)]["URL"]) + ") by " + toplist[str(rand)]["Channel"] + "? \n\n[(Reddit link)](" + toplist[str(rand)]["Reddit Link"] + ") \n\nIf you don't like this video, reply with ""!recommend"" and I'll find you another one."
     
     toplist.sync()
     toplist.close()
 
-    return rtn
+    return message.format(title=title, URL=URL, channel=channel, permalink=permalink)
 
 def user_is_inactive(user): #works in bot_5
     if user.created_utc > time.time()-(60*60*24*120): #reddit account is LESS than 4 months (182 days) old
@@ -694,7 +696,6 @@ def user_is_inactive(user): #works in bot_5
 
     return False #all tests passed; user is not inactive.
 
-
 def submission_is_deleted(id):
     """Returns True if a submission has been deleted. Does not work for comments."""
     try:
@@ -720,14 +721,15 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
     else:
         msg_intro = "You have received an automatic warning ban because of your post [here]({link}).\n\n"
 
-    if reason != "":
-        reason_text = "The moderator who invoked this ban, /u/{mod}, gave the following reason: \n\n>**" + reason + "**\n\n"
-    else:
+    if reason == "":
         reason_text = "The moderator who invoked this ban, /u/{mod}, did not provide a reason for the ban.\n\n"
         if spam_warning:
             reason = "spam"
         else:
             reason = "<No reason provided>"
+    else:
+        message_reason == reason if reason != "spam" else "Spam - multiple links to same youtube channel in a short period" #only used in the below line:
+        reason_text = "The moderator who invoked this ban, /u/{mod}, gave the following reason: \n\n>**" + message_reason + "**\n\n"
 
     if post.fullname[:2] == "t3": # submission
         link = post.shortlink
@@ -770,7 +772,7 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
         description = ("**This is your final warning**, which is accompanied by a 30-day subreddit ban; " +
                         "if you receive another warning, you will be permanently banned. " +
                         "Please take this opportunity to read [our subreddit rules](/r/asmr/wiki) before participating in the community again.")
-    elif ban_number >= 2: #should never be >2 though, unless they get a third warning and are then manually unbanned then get another warning
+    elif ban_number >= 2: #should never be >2 though, unless they get a third warning, are then manually unbanned by a mod, then later get another warning
         description = "You have ignored multiple previous warnings and continued to break our subreddit rules, meaning you are now permanently banned."
         duration = None
         
@@ -813,6 +815,9 @@ def title_has_two_tags(title):
         return False
 
 def title_is_caps(title):
+    if not any(tag in title.lower() for tag in ["[intentional]", "[unintentional]", "[roleplay]", "[role play]"]):
+        return False #only care about triggering submissions - ignore e.g. [discussion] posts
+
     title = title.replace("ASMR", "") # Remove the string "ASMR"
     title = title.replace("[INTENTIONAL]", "") # Remove the string "INTENTIONAL"
     title = title.replace("[Intentional]", "")
@@ -856,8 +861,7 @@ def is_youtube_link(url):
                     "list="     in url or 
                     "/channel/" in url or
                     "/user/"    in url
-                   )
-           )
+                   ))
         
 def is_roleplay(title, vid_id):
     try:
@@ -916,7 +920,6 @@ def update_seen_objects(): #works
     with open("seen_submissions.txt", "w") as f:
         f.write("\n".join(id for id in seen_submissions[-200:]))
 
-
 def clear_video_submissions():
     #Clean up database - only care about reposted videos from past 3 months
     recent_videos_cur.execute("DELETE FROM recent_videos WHERE SUBMISSION_DATE < ?", [time.time() - 7948800])
@@ -949,13 +952,14 @@ def update_warnings_wiki():
             bans.append((link, mod, reason, date, ban_num))
             user_warnings[username] = bans
 
-    page = "Name | Post | Banned by | Reason for ban | Date banned | Status\n---|---|---|---|---|---\n"
+    header = "This page is READ-ONLY - the bot will ignore and overwrite anything changed here. This page is for information about past bans only. To add a warning use the `!warning <reason>` comand. To permanently ban a user use the `!ban <reason>` command."
+    page = header + "\n\nName | Post | Banned by | Reason for ban | Date banned | Status\n---|---|---|---|---|---\n"
 
     for user in warned_user_list:
         bans = user_warnings[user]
         warnings = len(bans)
 
-        page = page + "/u/" + user
+        page += "/u/" + user
 
         readable_date = lambda x: str(datetime.datetime.fromtimestamp(int(x)).strftime('%Y-%m-%d'))
        
@@ -970,7 +974,7 @@ def update_warnings_wiki():
             else:
                 status = "Permanent"
 
-            page = page + " | " + link + " | " + "/u/" + mod + " | " + reason + " | " + readable_date(date) + " | " + status + "\n"
+            page += " | " + link + " | " + "/u/" + mod + " | " + reason + " | " + readable_date(date) + " | " + status + "\n"
 
     subreddit.wiki["warnings"].edit(page)
 
@@ -980,13 +984,6 @@ def user_is_subreddit_banned(username): #tested, works
 
     return username.lower() in names
 
-def asmr_bot():
-    schedule.run_pending()
-    check_submissions()
-    check_comments()
-    check_messages()
-    check_mod_queue()
-
 ## ----------------------------
 ## END OF FUNCTIONS
 ## ----------------------------
@@ -994,7 +991,7 @@ def asmr_bot():
 r = praw.Reddit("asmr_bot")
 print("Logged in as ", end="")
 print(r.user.me())
-subreddit = r.subreddit("asmrmodtalk")
+subreddit = r.subreddit("asmr")
 lounge = r.subreddit("asmrcreatorlounge")
 
 ###### TEST CODE GOES HERE
@@ -1009,7 +1006,7 @@ if __name__ == "__main__":
     update_warnings_wiki()
 
     schedule.every().thursday.at("23:50").do(remove_ffaf)
-    schedule.every(14).days.at("03:00").do(update_top_submissions) # once per fortnight ish
+    schedule.every(14).days.at("03:00").do(update_top_submissions) # once per fortnight
     schedule.every().hour.do(clear_user_submissions)
     schedule.every().day.do(update_seen_objects)
     schedule.every().day.at("02:00").do(clear_video_submissions) # once per day
@@ -1026,19 +1023,22 @@ if __name__ == "__main__":
 
     while True:
         try:
-            asmr_bot()
+            check_submissions()
+            check_comments()
+            check_mod_queue()
+            check_messages()
+            schedule.run_pending()
             exponential_dropoff = 5
         except prawcore.exceptions.ServerError as e:
-            try:
-                print("Server Exception: " + str(e))
-                #traceback.print_exc()
-                time.sleep(exponential_dropoff) #usually 503 so just try again soon
-                exponential_dropoff *= 2
-            except Exception as e:
-                print("Unknown exception: " + str(e))
-                traceback.print_exc()
-                print("Sleeping..")
-                time.sleep(30) #unknown error. Sleeping reduces reddit load.
+            print("Server Exception: " + str(e))
+            #traceback.print_exc()
+            time.sleep(exponential_dropoff) #usually 503 so just try again soon
+            exponential_dropoff *= 2
+        except Exception as e:
+            print("Unknown exception: " + str(e))
+            traceback.print_exc()
+            print("Sleeping..")
+            time.sleep(30) #unknown error.
         finally:
             first_run = False
-            time.sleep(7) # reduces reddit load and unnecessary processor usage
+            time.sleep(9) # reduces reddit load and unnecessary processor usage

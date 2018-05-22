@@ -1,2 +1,7 @@
 asmr_bot_data.py
 *.pyc
+*.db
+*.txt
+*.bak
+*.dat
+*.dir
