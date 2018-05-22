@@ -216,13 +216,27 @@ def check_comments():
                     continue
 
                 if comment_author != "asmr_bot":
-                    channels = re.findall(channel_name_regex, comment.body) #comment_body is lowercase; comment.body preserves capitalisation
+                    unescaped_body = comment.body.replace("\\", "") #remove any single backslashes added by reddit's "fancy" (read: stupid) comment editor
+                    channels = re.findall(channel_name_regex, unescaped_body)
                     if len(channels) > 0:
                         reply = ""
+                        message = ""
                         for channel in channels:
-                            reply += link_youtube_channel(channel) + "\n\n"
+                            details = link_youtube_channel(channel)
+                            if details != -1: #rogue value indicates no details found
+                                reply += details + "\n\n"
+                            else:
+                                if message == "":
+                                    message = "I couldn't find any details on the following tagged channels:\n\n"
+                                message += ("* {channel}\n\n".format(channel=channel))
                         print("Replying to tagged channel(s)..")
-                        comment.reply(reply).mod.distinguish()
+
+                        if reply != "": #channels with details found
+                            comment.reply(reply).mod.distinguish()
+
+                        if message != "": #channels with no details found
+                            comment.author.message(subject="Tagged channel(s) not found", message=message)
+
                         continue # don't carry out further checks
                     
                 # moderator commands
@@ -605,10 +619,10 @@ def link_youtube_channel(name):
         
             return table
         except (KeyError, AttributeError, IndexError):
-            return("I couldn't find a youtube channel with the name \"{name}\".".format(name=name))
+            return -1
 
     else: #NOT FOUND
-        return("I couldn't find a youtube channel with the name \"{name}\".".format(name=name))
+        return -1
     
 def update_top_submissions(): # updates recommendation database. Doesn't usually need to be run unless the data gets corrupt or the top submissions drastically change.
     toplist = shelve.open("topPosts","c")
