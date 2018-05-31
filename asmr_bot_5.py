@@ -12,6 +12,7 @@ import string
 import requests
 import traceback
 import queue
+from difflib import SequenceMatcher as matcher
 
 import schedule
 
@@ -47,6 +48,7 @@ unlisted_explain = d.UNLISTED_COMMENT
 spam_explain = d.SPAM_COMMENT
 repost_explain = d.REPOST_COMMENT
 channel_or_playlist_explain = d.CHANNEL_PLAYLIST_EXPLAIN
+nsfw_explain = d.NSFW_EXPLAIN
 replies = d.messages
 comment_reply = d.comment_reply
 taggable_channels = d.linkable_channels
@@ -264,6 +266,13 @@ def check_comments():
                             submission.mod.remove()
                             submission.reply(mod_title_explain.format(mod=comment_author)).mod.distinguish()
                             continue
+                        elif comment_body.startswith("!nsfw"):
+                            print("Removing submission in response to " + comment_author + " (nsfw content)")
+                            remove_mod_comment(comment)
+                            submission = r.submission(id=comment.parent_id[3:])
+                            submission.mod.remove()
+                            submission.reply(nsfw_explain.format(mod=comment_author)).mod.distinguish()
+                            continue
                     if comment_body.startswith("!remove"):
                         print("Removing submission in response to " + comment_author + " (remove by command)")
                         remove_mod_comment(comment)
@@ -319,15 +328,13 @@ def check_comments():
                             message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\> {reason} \n\n Ban list: /r/asmr/about/banned"
 
                             r.redditor(comment_author).message(subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
-                        except PermissionError:
-                            r.send_message(recipient=comment_author, subject="Ban failed", message="You issued a command [here]({link}) in which you tried to ban a moderator, which is not possible.".format(link=comment.permalink))
-                        except praw.exceptions.APIException as ex:
+                        except (PermissionError, praw.exceptions.APIException) as ex:
                             if ex.error_type == "CANT_RESTRICT_MODERATOR":
                                 r.send_message(recipient=comment_author, subject="Ban failed", message="You issued a command [here]({link}) in which you tried to ban a moderator, which is not possible.".format(link=comment.permalink))
                             else:
                                 raise #act as if the exception was never caught here
                     else:
-                        if any(comment_body.startswith(command) for command in ["!meta", "!music", "!title"]):
+                        if any(comment_body.startswith(command) for command in ["!meta", "!music", "!title", "!nsfw"]):
                             print("Invalid command from " + comment_author + " - submission command in reply to comment.")
                             r.redditor(comment.author.name).message(subject="Invalid bot command", message="You issued a command [here]({link}) in reply to a comment, but that command can only be used in reply to a submission. Please re-issue the command as a top-level comment.".format(link=comment.permalink))
                             remove_mod_comment(comment)
@@ -441,7 +448,8 @@ def check_submissions():
 
                                 user_submissions_cur.execute("SELECT * FROM user_submissions WHERE USERNAME=?", [submission.author.name.lower()])
                                 user_submission_list = user_submissions_cur.fetchall() #list of type [[name, id, time, link, channel]]
-                                
+
+                                submission_links = ""
                                 count = 0
 
                                 for db_submission in user_submission_list:
@@ -594,18 +602,78 @@ def remove_mod_comment(comment):
     else:
         comment.mod.remove()
 
+def get_channel_id(name):
+    url = 'https://www.youtube.com/results?search_query='
+    r_id = re.compile("/channel/(UC[a-zA-Z0-9\-\_]*?)\"")
+    r_name = re.compile("href=\"/user/([a-zA-Z0-9]*?)\"")
+    name = "".join(c for c in name.lower() if c in "abcdefghijklmnopqrstuvwxyz0123456789")
+
+    page = requests.get(url + name).text
+    names = set(name.lower() for name in re.findall(r_name, page))
+
+    for match_name in names: #might be linked by username
+        if matcher(a=match_name, b=name).ratio() > 0.8: #check for close matches
+            URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername={name}&key=" + g_browser_key).format(name=match_name)
+            json = requests.get(URL).json()
+            id = json["items"][0]["id"]
+            return id
+
+    #username not found, so look for ID:
+
+    channels = re.findall(r_id, page)
+    unique_channels = []
+
+    #stupid default channels (News, Sport etc):
+    dumb_channels = {'UCOpNcN46UbXVtpKMrmU4Abg', 'UCYfdidRxbB8Qhf0Nx7ioOYw', 'UCwWxEudXr2xxrbVfulvvd8g', 
+                    'UCEgdi0XIXXZ-qJOFPf4JSKw', 'UClgRkhTL3_hImCAmdLfDE4g', 'UC4R8DWoMoI7CAwX8_LjQHig', 
+                    'UC-9-kyTW8ZkZNDHQJ6FgpwQ', 'UCULkRHBdLC5ZcEQBaL0oYHQ', 'UCzuqhhs6NWbgTzMuM09WKDQ'}
+
+    for c in channels:
+        if c not in unique_channels and c not in dumb_channels:
+            unique_channels.append(c) #remove duplicates while preserving list order
+
+    snippets = []
+
+    for channel in unique_channels:
+        URL = ("https://www.googleapis.com/youtube/v3/channels?part=snippet&id={id}&key=" + g_browser_key).format(id=channel)
+        try: 
+            result = requests.get(URL)
+            json = result.json()
+            snippet = json["items"][0]["snippet"]
+            try:
+                custom_url = snippet["customUrl"].lower()
+            except KeyError:
+                custom_url = ""
+            description = snippet["description"].lower()
+            channel_title = snippet["title"].lower()
+
+            if name in custom_url or name in description or name in channel_title:
+                return channel #exact match
+            snippets.append((channel, custom_url, description, channel_title))
+        except (KeyError, IndexError) as ex:
+            continue
+        
+    for channel, custom_url, description, channel_title in snippets: #check for any asmr channel
+        if any(word in info for word in ["asmr", "tingle", "relax"] for info in [custom_url, description, channel_title]):
+            return channel
+    return -1
+
 def link_youtube_channel(name):
     channel_id = ""
+    name = "".join(c for c in name.lower() if c in "abcdefghijklmnopqrstuvwxyz0123456789")
 
     for channel_names in taggable_channels:
         if name in channel_names:
             channel_id = taggable_channels[channel_names] #check if the Id is in the commonly-used list
+            break
+    else:
+        channel_id = get_channel_id(name)
+    
+    if channel_id == -1:
+        print("Channel ID not found for " + name)
+        return -1
 
-    if channel_id == "": #if not, request details using the tagged name
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername={name}&key=" + g_browser_key).format(name=name)
-    else: #if channel name is identified, use the ID to avoid linking the wrong channel
-        URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&id={id}&key=" + g_browser_key).format(id=channel_id)
-
+    URL = ("https://www.googleapis.com/youtube/v3/channels?part=statistics&id={id}&key=" + g_browser_key).format(id=channel_id)
     response = requests.get(URL)
 
     if response.status_code == 200:
@@ -752,7 +820,7 @@ def new_warning(post, banning_mod, reason="", spam_warning=False):
         else:
             reason = "<No reason provided>"
     else:
-        message_reason == reason if reason != "spam" else "Spam - multiple links to same youtube channel in a short period" #only used in the below line:
+        message_reason = reason if reason != "spam" else "Spam - multiple links to same youtube channel in a short period" #only used in the below line:
         reason_text = "The moderator who invoked this ban, /u/{mod}, gave the following reason: \n\n>**" + message_reason + "**\n\n"
 
     if post.fullname[:2] == "t3": # submission
@@ -1060,7 +1128,8 @@ if __name__ == "__main__":
             exponential_dropoff *= 2
         except Exception as e:
             print("Unknown exception: " + str(e))
-            traceback.print_exc()
+            if "Read timed out" not in str(e): #don't care about reddit 503
+                traceback.print_exc()
             print("Sleeping..")
             time.sleep(30) #unknown error.
         finally:
