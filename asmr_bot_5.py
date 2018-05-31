@@ -49,6 +49,7 @@ spam_explain = d.SPAM_COMMENT
 repost_explain = d.REPOST_COMMENT
 channel_or_playlist_explain = d.CHANNEL_PLAYLIST_EXPLAIN
 nsfw_explain = d.NSFW_EXPLAIN
+edit_link_explain = d.EDIT_LINK
 replies = d.messages
 comment_reply = d.comment_reply
 taggable_channels = d.linkable_channels
@@ -338,7 +339,6 @@ def check_comments():
                             print("Invalid command from " + comment_author + " - submission command in reply to comment.")
                             r.redditor(comment.author.name).message(subject="Invalid bot command", message="You issued a command [here]({link}) in reply to a comment, but that command can only be used in reply to a submission. Please re-issue the command as a top-level comment.".format(link=comment.permalink))
                             remove_mod_comment(comment)
-                       
 
             except AttributeError as ex: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
                 print("Attribute Error! Comment was probably deleted. Comment was " + str(comment.fullname))
@@ -379,6 +379,10 @@ def check_submissions():
                     submission.reply(capital_explain).mod.distinguish(sticky=True)
                     r.redditor("theonefoster").message(subject="Upper case title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
                     print("Removed submission " + submission.id + " for having an uppercase title.")
+                elif "youtube.com/edit" in submission.url:
+                    submission.mod.remove(False)
+                    submission.reply(edit_link_explain).mod.distinguish(sticky=True)
+                    print("Removed submission " + submission.id + " - edit link submitted.")
                 elif ("youtube." in submission.url or "youtu.be" in submission.url):
                     try:
                         if is_channel_or_playlist_link(submission.url):
@@ -416,8 +420,6 @@ def check_submissions():
                                             continue # already processed this post, so don't process it again
                                 except (prawcore.exceptions.PrawcoreException, praw.exceptions.PRAWException):
                                     remove_post = False # assume repost is allowed by default; won't be removed
-
-                                #recent_videos(ID TEXT, SUBMISSION_DATE INT, REDDIT_ID TEXT
 
                                 if remove_post: # flag to show if it should be removed
                                     submission.mod.remove(False)
