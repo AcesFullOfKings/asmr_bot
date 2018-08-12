@@ -37,8 +37,6 @@ banned_channels = set()
 
 # Messages
 meta_explain = d.META_EXPLAIN
-sb_explain = d.SB_EXPLAIN
-sb_explain_msg = d.SB_EXPLAIN_MSG
 mus_explain = d.MUS_EXPLAIN
 mod_title_explain = d.MOD_TITLE_EXPLAIN
 two_tags_explain = d.TWO_TAGS_COMMENT
@@ -49,11 +47,11 @@ spam_explain = d.SPAM_COMMENT
 repost_explain = d.REPOST_COMMENT
 channel_or_playlist_explain = d.CHANNEL_PLAYLIST_EXPLAIN
 nsfw_explain = d.NSFW_EXPLAIN
-edit_link_explain = d.EDIT_LINK
 replies = d.messages
 comment_reply = d.comment_reply
 taggable_channels = d.linkable_channels
 capital_explain = d.CAPITAL_TITLE
+edit_link_explain = d.EDIT_LINK
 del(d)
 
 vid_id_regex = re.compile('(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|(embed|v)\/))([^\?&\"\'>]+)')
@@ -172,7 +170,7 @@ def check_mod_queue(): #tested - works
 
             if len(modqueue) >= 4 and modqueue_is_full == False:
                 print("Full modqueue detected! Messaging mods..")
-                subject = "Modqueue items require attention! (bot v5.0)"
+                subject = "Modqueue items require attention!"
                 message = "The modqueue has multiple unactioned items in it - please review them asap! \n\n https://www.reddit.com/r/asmr/about/modqueue/"
                 subreddit.message(subject=subject, message=message)
                 modqueue_is_full = True
@@ -296,16 +294,15 @@ def check_comments():
                         print("Removing comment tree in response to " + comment_author + " (kill thread)")
                         try:
                             parent = r.comment(id=comment.parent_id[3:])
-                            if parent.fullname[:2] == "t1":# comment
-                                purge_thread(parent)
-                            else:
-                                r.redditor(comment_author).message(subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.")
-                           
+                            parent.refresh()
+                            purge_thread(parent)
                             remove_mod_comment(comment)
+                        except praw.exceptions.PRAWException as e: # tried to assign submission to a comment object; !purge was used at top-level
+                            r.redditor(comment_author).message(subject="Failed command", message="The !purge command can only be used in reply to a comment. It cannot be a top-level comment.")
                         except Exception as e:
-                            print("Exception when purging comment tree - "+str(e)+"\nParent was " + parent.id)
+                            print("Exception when purging comment tree - " + str(e) + "\nParent was " + parent.id)
                             # traceback.print_exc()
-                            r.send_message(recipient=comment_author, subject="Failed command", message="Your purge command failed for an unknown reason. Your comment was removed.")
+                            r.redditor(comment_author).message(subject="Failed command", message="Your purge command failed for an unknown reason. Your comment was removed.")
                         finally:
                             comment.mod.remove()
                     elif comment_body.startswith("!ban"):
@@ -329,16 +326,19 @@ def check_comments():
                             message = "I have permanently banned {ban_user} for their [post here]({ban_post}?context=9) in response to [your comment here]({comment}?context=9), with the reason: \n\n\> {reason} \n\n Ban list: /r/asmr/about/banned"
 
                             r.redditor(comment_author).message(subject="Ban successful", message=message.format(ban_user=ban_user, ban_post=parent.permalink, comment=comment.permalink, reason=reason))
-                        except (PermissionError, praw.exceptions.APIException) as ex:
+                        except PermissionError:
+                            r.send_message(recipient=comment_author, subject="Ban failed", message="You issued a command [here]({link}) in which you tried to ban a moderator, which is not possible.".format(link=comment.permalink))
+                        except praw.exceptions.APIException as ex:
                             if ex.error_type == "CANT_RESTRICT_MODERATOR":
                                 r.send_message(recipient=comment_author, subject="Ban failed", message="You issued a command [here]({link}) in which you tried to ban a moderator, which is not possible.".format(link=comment.permalink))
                             else:
                                 raise #act as if the exception was never caught here
                     else:
-                        if any(comment_body.startswith(command) for command in ["!meta", "!music", "!title", "!nsfw"]):
+                        if any(comment_body.startswith(command) for command in ["!meta", "!music", "!title"]):
                             print("Invalid command from " + comment_author + " - submission command in reply to comment.")
                             r.redditor(comment.author.name).message(subject="Invalid bot command", message="You issued a command [here]({link}) in reply to a comment, but that command can only be used in reply to a submission. Please re-issue the command as a top-level comment.".format(link=comment.permalink))
                             remove_mod_comment(comment)
+                       
 
             except AttributeError as ex: # if comment has no author (is deleted) (comment.author.name returns AttributeError), do nothing
                 print("Attribute Error! Comment was probably deleted. Comment was " + str(comment.fullname))
@@ -379,10 +379,10 @@ def check_submissions():
                     submission.reply(capital_explain).mod.distinguish(sticky=True)
                     r.redditor("theonefoster").message(subject="Upper case title - submission removed", message=submission.permalink + "\n\nTitle was: \"**" + submission.title + "**\"")
                     print("Removed submission " + submission.id + " for having an uppercase title.")
-                elif "youtube.com/edit" in submission.url:
+                elif is_edit_link(submission.url):
                     submission.mod.remove(False)
                     submission.reply(edit_link_explain).mod.distinguish(sticky=True)
-                    print("Removed submission " + submission.id + " - edit link submitted.")
+                    print("Removed submission " + submission.id + " - link to edit page.")
                 elif ("youtube." in submission.url or "youtu.be" in submission.url):
                     try:
                         if is_channel_or_playlist_link(submission.url):
@@ -420,6 +420,8 @@ def check_submissions():
                                             continue # already processed this post, so don't process it again
                                 except (prawcore.exceptions.PrawcoreException, praw.exceptions.PRAWException):
                                     remove_post = False # assume repost is allowed by default; won't be removed
+
+                                #recent_videos(ID TEXT, SUBMISSION_DATE INT, REDDIT_ID TEXT
 
                                 if remove_post: # flag to show if it should be removed
                                     submission.mod.remove(False)
@@ -801,6 +803,8 @@ def submission_is_deleted(id):
 def new_warning(post, banning_mod, reason="", spam_warning=False):
     user = post.author.name.lower()
 
+    reason = "".join(c for c in reason if 32 <= ord(c) <= 125) #filter out weird characters in reason
+
     if type(banning_mod) != type(""):
         raise TypeError("banning_mod must be of type string")
     
@@ -949,6 +953,9 @@ def is_channel_or_playlist_link(url):
     else:
         return False
 
+def is_edit_link(url):
+    return "youtube.com/edit" in url
+
 def is_youtube_link(url):
     return ((".youtube." in url or "youtu.be" in url)
             and not("playlist"  in url or
@@ -980,7 +987,8 @@ def is_roleplay(title, vid_id):
         return False
 
 def purge_thread(comment): #works
-    for reply in comment.replies:
+    for reply in comment.replies: #lists all replies, replies to replies, etc
+        reply.replies.replace_more()
         purge_thread(reply) # recursion is cool
     comment.mod.remove(False)
 
@@ -1031,22 +1039,22 @@ def get_banned_channels(): #tesdted in bot_5, works
 
 def update_warnings_wiki():
     warnings_cursor.execute("SELECT * FROM warnings")
-    db_result = sorted(warnings_cursor.fetchall(), key=lambda x: x[4])
+    db_result = sorted(warnings_cursor.fetchall(), key=lambda x: x[4]) # sort by timestamp
 
-    user_warnings = dict() #dict of form {username: [(ban info)]}
+    user_warnings = dict() #dict of form {username: [(ban info)]} 
     warned_user_list = [] #list of users sorted by date first banned
 
     for war in db_result:
         username, link, mod, reason, date, ban_num = war
         if username not in user_warnings:
-            warned_user_list.append(username)
+            warned_user_list.append(username) # list of users sorted by date first banned
             user_warnings[username] = [(link, mod, reason, str(date), ban_num)]
         else:
             bans = user_warnings[username] # must be of length >= 1
             bans.append((link, mod, reason, date, ban_num))
             user_warnings[username] = bans
 
-    header = "This page is READ-ONLY - the bot will ignore and overwrite anything changed here. This page is for information about past bans only. To add a warning use the `!warning <reason>` comand. To permanently ban a user use the `!ban <reason>` command."
+    header = "**This page is READ-ONLY - the bot will ignore and overwrite anything changed here. This page is for information about past bans only. To add a warning use the `!warning <reason>` comand. To permanently ban a user use the `!ban <reason>` command.**"
     page = header + "\n\nName | Post | Banned by | Reason for ban | Date banned | Status\n---|---|---|---|---|---\n"
 
     for user in warned_user_list:
@@ -1067,6 +1075,8 @@ def update_warnings_wiki():
                 status = "LAST warning"
             else:
                 status = "Permanent"
+
+            reason = "".join(c for c in reason if 32 <= ord(c) <= 125) #filter out weird characters in reason
 
             page += " | " + link + " | " + "/u/" + mod + " | " + reason + " | " + readable_date(date) + " | " + status + "\n"
 
